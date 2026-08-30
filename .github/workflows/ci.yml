@@ -1,0 +1,42 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: No privileged-key references in the CLI (ARCH-02)
+        run: |
+          test -d src && test -d dist || { echo "src/dist missing" >&2; exit 1; }
+          if grep -rEn --exclude='*.test.ts' --exclude='env.ts' --exclude='config.ts' \
+              -e 'SUPABASE_SERVICE_ROLE_KEY' -e 'sb_secret_' \
+              -e '"role"[[:space:]]*:[[:space:]]*"service_role"' src dist; then
+            echo "ARCH-02: privileged-key reference found in src/dist" >&2; exit 1
+          fi
+      - name: No secret values in any tracked file
+        run: |
+          matches=$(git ls-files -z ':(exclude,glob)**/*.test.ts' ':(exclude,glob)**/*.md' \
+            | xargs -0 grep -En -e 'sb_secret_[A-Za-z0-9_-]{16,}' \
+                -e '"role"[[:space:]]*:[[:space:]]*"service_role"' || true)
+          if [ -n "$matches" ]; then echo "$matches" >&2; echo "secret value in tracked file" >&2; exit 1; fi
+      - name: Tarball contains only the expected files
+        run: |
+          files=$(npm pack --dry-run --json | node -e '
+            const p=JSON.parse(require("fs").readFileSync(0,"utf8"))[0];
+            console.log(p.files.map(f=>f.path).sort().join("\n"))')
+          echo "$files"
+          expected=$(printf 'LICENSE\nNOTICE\nREADME.md\ndist/cli.js\npackage.json\n')
+          [ "$files" = "$expected" ] || { echo "unexpected tarball contents" >&2; exit 1; }

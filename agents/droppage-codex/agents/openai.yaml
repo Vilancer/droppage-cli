@@ -1,0 +1,5 @@
+interface:
+  display_name: "droppage HTML publishing"
+  short_description: "Publish and manage HTML reports with droppage."
+  default_prompt: "Use $droppage-publish-html to publish or manage this HTML artifact with droppage."
+  brand_color: "#00A9A5"

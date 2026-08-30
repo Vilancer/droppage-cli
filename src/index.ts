@@ -1,0 +1,28 @@
+import { Command } from 'commander';
+import pkg from '../package.json' with { type: 'json' };
+import { registerLogin } from './commands/login.js';
+import { registerLogout } from './commands/logout.js';
+import { registerUpload } from './commands/upload.js';
+import { registerUpdate } from './commands/update.js';
+import { registerList } from './commands/list.js';
+import { registerDelete } from './commands/delete.js';
+import { registerRecipients } from './commands/recipients.js';
+
+export function createProgram(): Command {
+  const program = new Command()
+    .name('droppage')
+    .description(
+      'Publish HTML files as shareable, access-controlled live pages',
+    )
+    .version(pkg.version);
+
+  registerLogin(program);
+  registerLogout(program);
+  registerUpload(program);
+  registerUpdate(program);
+  registerList(program);
+  registerDelete(program);
+  registerRecipients(program);
+
+  return program;
+}

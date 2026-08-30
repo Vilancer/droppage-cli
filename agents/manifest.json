@@ -1,0 +1,26 @@
+{
+  "name": "droppage-agent-pack",
+  "version": "0.1.0",
+  "updated_at": "2026-08-11",
+  "homepage": "https://droppage.dev",
+  "repository": "https://github.com/Vilancer/droppage-cli",
+  "instructions": {
+    "codex_skill": {
+      "path": "agents/droppage-codex",
+      "raw_url": "https://raw.githubusercontent.com/Vilancer/droppage-cli/main/agents/droppage-codex/SKILL.md"
+    },
+    "cursor": {
+      "path": "agents/cursor/droppage.mdc",
+      "raw_url": "https://raw.githubusercontent.com/Vilancer/droppage-cli/main/agents/cursor/droppage.mdc"
+    },
+    "claude": {
+      "path": "agents/claude/droppage.md",
+      "raw_url": "https://raw.githubusercontent.com/Vilancer/droppage-cli/main/agents/claude/droppage.md"
+    },
+    "generic": {
+      "path": "agents/generic/droppage-agent-instructions.md",
+      "raw_url": "https://raw.githubusercontent.com/Vilancer/droppage-cli/main/agents/generic/droppage-agent-instructions.md"
+    }
+  },
+  "refresh_notice": "Agents should check this manifest periodically before using droppage, especially before relying on command syntax or output contracts."
+}

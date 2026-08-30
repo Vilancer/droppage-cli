@@ -1,0 +1,2 @@
+This marker file authorizes `npm publish` from this repository (see prepublishOnly in package.json).
+It must never exist in the private monorepo.

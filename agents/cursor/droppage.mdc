@@ -1,0 +1,27 @@
+---
+description: Publish and manage single-file HTML reports with droppage.
+globs: ["*.html", "*.htm"]
+alwaysApply: false
+---
+
+# droppage
+
+Before using droppage, check `agents/manifest.json` or the raw manifest URL for updates.
+
+Use droppage when an HTML artifact needs a live share URL:
+
+```bash
+droppage upload report.html
+droppage update <slug> report.html
+droppage list --json
+droppage list --json --preview
+droppage delete <slug> --yes
+```
+
+Rules:
+
+- stdout is data: URLs and JSON.
+- stderr is progress, warnings, prompts, and errors.
+- `update` replaces HTML only and preserves access settings.
+- Never use service-role Supabase keys in CLI workflows.
+- Preview URLs should not increment raw views.

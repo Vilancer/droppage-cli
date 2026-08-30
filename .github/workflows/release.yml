@@ -1,0 +1,29 @@
+# Publishes `droppage` to npm via OIDC trusted publishing (no token; provenance is
+# attached automatically). Bound on npmjs.com to: org Vilancer, repo droppage-cli,
+# workflow release.yml. Renaming this file breaks publishing until npm settings are updated.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Upgrade npm (OIDC publish needs npm >= 11.5.1)
+        run: npm install -g npm@11 && npm --version
+      - run: npm ci
+      - name: Tag must match package.json version
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          [ "v$PKG" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != package.json v$PKG" >&2; exit 1; }
+      - run: npm test
+      - run: npm run build
+      - run: npm publish

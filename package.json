@@ -27,7 +27,7 @@
     "node": ">=22"
   },
   "bin": {
-    "droppage": "./dist/cli.js"
+    "droppage": "dist/cli.js"
   },
   "files": [
     "dist",

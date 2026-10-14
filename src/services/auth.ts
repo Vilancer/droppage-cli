@@ -109,9 +109,11 @@ export async function login(): Promise<void> {
   );
 
   // D-04: never open emailRedirectTo (loopback callback ≠ magic link).
-  // Optionally open Inbucket when using local Supabase.
+  // Optionally open Inbucket when using local Supabase, unless scripted runs
+  // ask for no browser (DROPPAGE_NO_BROWSER=1) or this is CI.
   const { url } = resolveSupabaseEnv();
-  if (isLocalSupabaseUrl(url)) {
+  const noBrowser = Boolean(process.env.DROPPAGE_NO_BROWSER || process.env.CI);
+  if (isLocalSupabaseUrl(url) && !noBrowser) {
     try {
       await open(INBUCKET_URL);
     } catch {

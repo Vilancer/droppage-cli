@@ -63,3 +63,32 @@ test('sb_secret values are rejected', () => {
 
   expect(() => resolveSupabaseEnv()).toThrow(/sb_secret|secret|service_role/i);
 });
+
+// dotenv writes its own banner ("◇ injected env (N) from .env // tip: …") to
+// STDOUT via console.log unless `quiet` is set, which would corrupt the
+// machine-readable stdout contract: upload/update print only the URL, `list
+// --json` / `quota --json` only JSON, `feedback` only the submission id. The
+// banner fires whether or not a .env file exists, so both cases are covered.
+test.for([
+  { label: 'with a .env present', writeDotenv: true },
+  { label: 'with no .env at all', writeDotenv: false },
+])('resolveSupabaseEnv writes nothing to stdout $label', ({ writeDotenv }) => {
+  process.env.DROPPAGE_SUPABASE_URL = 'https://droppage.example';
+  process.env.DROPPAGE_SUPABASE_ANON_KEY = 'anon-droppage';
+
+  tempDir = mkdtempSync(join(tmpdir(), 'droppage-env-'));
+  if (writeDotenv) {
+    writeFileSync(join(tempDir, '.env'), 'UNRELATED_KEY=value\n');
+  }
+  process.chdir(tempDir);
+
+  // dotenv logs through console.log, which can bypass a process.stdout.write
+  // spy — watch both.
+  const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+  resolveSupabaseEnv();
+
+  expect(logSpy).not.toHaveBeenCalled();
+  expect(outSpy).not.toHaveBeenCalled();
+});

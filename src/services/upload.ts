@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { User } from '@supabase/supabase-js';
 import { buildShareUrl } from '../lib/share-url.js';
 import { createSlug } from '../lib/slug.js';
+import { asError } from '../lib/supabase-error.js';
 import { createSupabaseClient } from '../lib/supabase.js';
 import { validateHtmlUpload } from '../lib/validate-html.js';
 
@@ -40,6 +41,8 @@ export async function upload({
   passwordHash,
   allowedEmails,
   accessMode,
+  prepare,
+  expiresAt,
 }: {
   file: string;
   user: User;
@@ -58,36 +61,75 @@ export async function upload({
    * public) so existing callers keep working. `private` and `email` both carry
    * an allowlist; the command distinguishes them (private = owner self-allowlist). */
   accessMode?: AccessMode;
+  /** Called once the slug for an attempt is chosen (after the server preflight),
+   * before the HTML is stored: uploads the page's images for that slug and
+   * returns the HTML with its image links rewritten. */
+  prepare?: (slug: string) => Promise<Buffer>;
+  /** When the page should expire (set right after it is created). */
+  expiresAt?: Date;
 }): Promise<string> {
-  const bytes = await readFile(file);
+  let bytes: Buffer = await readFile(file);
 
   // Pure validation BEFORE any network call (PUB-03 / D-08). Throws on hard
   // failures (bad extension, empty, over cap, non-HTML content).
   const { warnings } = validateHtmlUpload(file, bytes);
-  for (const w of warnings) console.error(`droppage: warning: ${w}`);
+  // With local images, warn about the HTML as published (links rewritten), not
+  // about references that are about to be uploaded.
+  if (!prepare) for (const w of warnings) console.error(`droppage: warning: ${w}`);
 
   const supabase = createSupabaseClient();
+
+  // Exactly one access-mode payload column is written so the Plan 01
+  // pages_access_mode_consistency CHECK is satisfied: email/private ⇒
+  // allowed_emails non-empty + password_hash NULL; password ⇒ password_hash +
+  // allowed_emails NULL; public ⇒ neither. The command passes the resolved
+  // accessMode (D-06); when omitted it is derived for backward compatibility.
+  // Depends only on the arguments, not the slug, so it is resolved once.
+  const resolvedMode: AccessMode =
+    accessMode ??
+    (allowedEmails ? 'email' : passwordHash ? 'password' : 'public');
+
+  // Server-side preflight BEFORE the storage write, mirroring updatePageHtml.
+  // The storage.objects insert policy gates on a bare boolean, so a plan-limit
+  // denial there surfaces Postgres's generic RLS message and the server's own
+  // wording never reaches the publisher. Asking Postgres first fixes that.
+  // Postgres stays authoritative: create_page_with_entitlements re-checks under
+  // an advisory lock, so a race here changes the message, never the outcome.
+  // Runs once per upload, not once per slug attempt.
+  const preflight = await supabase.rpc('assert_page_create_allowed', {
+    p_access_mode: resolvedMode,
+    p_recipient_count: allowedEmails?.length ?? 0,
+  });
+  if (preflight.error) throw asError(preflight.error);
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const slug = createSlug();
     // Object path MUST match the Plan 01 storage.objects RLS predicate
     // `(storage.foldername(name))[1] = auth.jwt()->>'sub'` (Pitfall 3).
     const storagePath = `${user.id}/${slug}.html`;
+    if (prepare) {
+      bytes = await prepare(slug);
+      if (attempt === 0) for (const w of validateHtmlUpload(file, bytes).warnings) console.error(`droppage: warning: ${w}`);
+    }
 
     const up = await supabase.storage.from(BUCKET).upload(storagePath, bytes, {
       contentType: 'text/html; charset=utf-8',
       upsert: false,
     });
-    if (up.error) throw up.error;
+    if (up.error) {
+      // The preflight already passed, so a policy denial here is a race (a
+      // concurrent upload taking the last slot) or an unrelated policy clause.
+      // Keep the server's own text verbatim, claim no specific cause, and point
+      // at the command that can explain limits — no limit arithmetic or plan
+      // knowledge belongs in the CLI.
+      if (/row-level security/i.test(up.error.message)) {
+        throw new Error(
+          `the server rejected this upload: ${up.error.message}. This can happen when an account limit is reached while an upload is in flight — run \`droppage quota\` to check your limits.`,
+        );
+      }
+      throw asError(up.error);
+    }
 
-    // Exactly one access-mode payload column is written so the Plan 01
-    // pages_access_mode_consistency CHECK is satisfied: email/private ⇒
-    // allowed_emails non-empty + password_hash NULL; password ⇒ password_hash +
-    // allowed_emails NULL; public ⇒ neither. The command passes the resolved
-    // accessMode (D-06); when omitted it is derived for backward compatibility.
-    const resolvedMode: AccessMode =
-      accessMode ??
-      (allowedEmails ? 'email' : passwordHash ? 'password' : 'public');
     // Postgres is authoritative for page, monthly, and feature quotas. Direct
     // INSERT is revoked from authenticated users, so skipping a CLI preflight
     // cannot bypass the entitlement boundary.
@@ -98,7 +140,17 @@ export async function upload({
       p_password_hash: resolvedMode === 'password' ? passwordHash : null,
       p_allowed_emails: allowedEmails ?? null,
     });
-    if (!ins.error) return buildShareUrl(slug);
+    if (!ins.error) {
+      if (expiresAt) {
+        const expiry = await supabase.rpc('set_page_expiry', { p_slug: slug, p_expires_at: expiresAt.toISOString() });
+        if (expiry.error) {
+          throw new Error(
+            `published ${buildShareUrl(slug)} but could not set its expiry (${expiry.error.message}); set it with \`droppage expire ${slug} <when>\` or delete it`,
+          );
+        }
+      }
+      return buildShareUrl(slug);
+    }
 
     // ANY failed insert (slug collision, RLS denial, check-constraint, transient
     // network error) leaves the just-uploaded object orphaned in the private
@@ -113,7 +165,7 @@ export async function upload({
     }
     // Slug UNIQUE violation → retry with a fresh slug; any other error is fatal.
     if (ins.error.code === '23505') continue;
-    throw ins.error;
+    throw asError(ins.error);
   }
 
   throw new Error(

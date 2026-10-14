@@ -15,6 +15,11 @@ class AuthRequiredError extends Error {
   }
 }
 
+vi.mock('../services/page-images.js', () => ({
+  hasLocalImages: async () => false,
+  attachLocalImages: async () => ({ html: Buffer.from(''), uploaded: [] }),
+}));
+
 vi.mock('../services/upload.js', () => ({
   upload: (...args: unknown[]) => uploadMock(...args),
 }));
@@ -92,6 +97,39 @@ test('on failure: error to stderr, exit code 1, stdout empty', async () => {
   expect(errSpy.mock.calls.flat().join('\n')).toMatch(
     /upload failed: Content does not look like HTML/i,
   );
+});
+
+test.each([
+  'page quota reached for this account',
+  'password pages require Starter or Builder',
+  // The exact wording raised by assert_page_create_allowed /
+  // create_page_with_entitlements, pinning the hint to the real server text.
+  'page quota reached (5 of 5); delete a page or upgrade',
+  'monthly quota reached; existing links remain live until the next UTC month',
+])('quota/plan failure adds actionable quota guidance: %s', async (message) => {
+  requireAuthMock.mockResolvedValue({ id: 'u1' });
+  uploadMock.mockRejectedValue(new Error(message));
+  const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  await run('report.html');
+
+  expect(outSpy).not.toHaveBeenCalled();
+  expect(errSpy.mock.calls.flat().join('\n')).toContain(
+    'run `droppage quota` to see your limits',
+  );
+  expect(process.exitCode).toBe(1);
+});
+
+test('unrelated upload failures do not suggest quota', async () => {
+  requireAuthMock.mockResolvedValue({ id: 'u1' });
+  uploadMock.mockRejectedValue(new Error('Content does not look like HTML'));
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  await run('bad.html');
+
+  expect(errSpy.mock.calls.flat().join('\n')).not.toContain('droppage quota');
 });
 
 test('auth gate: missing session is swallowed, nothing on stdout', async () => {

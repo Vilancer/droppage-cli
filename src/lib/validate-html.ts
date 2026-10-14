@@ -1,5 +1,7 @@
 import { extname } from 'node:path';
 
+import { resolveShareBaseUrl } from './share-url.js';
+
 /** Maximum accepted upload size — 5 MB, comfortably under Supabase's 6 MB
  * standard-upload threshold (D-08 / RESEARCH Pattern 4). */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -23,12 +25,19 @@ const HTML_MARKERS = [
  * single-file share (Pitfall 9 / D-08). Matches `src`/`href` values that
  * begin with `./`, `../`, or `/` (but not `//` protocol-relative, handled
  * separately). */
+// `/i/<id>.<ext>` is a droppage-hosted page image: it resolves on the share
+// origin, so it is not a broken relative asset.
 const RELATIVE_ASSET_RE =
-  /(?:src|href)\s*=\s*["'](?:\.\.?\/|\/(?!\/))/i;
+  /(?:src|href)\s*=\s*["'](?:\.\.?\/|\/(?!\/)(?!i\/[A-Za-z0-9]{12}\.[a-z]+["']))/i;
 
 /** Protocol-relative or absolute external asset references (`//host`,
  * `http://`, `https://`). These also will not always resolve as authored. */
-const EXTERNAL_ASSET_RE = /(?:src|href)\s*=\s*["'](\/\/|https?:\/\/)/i;
+const EXTERNAL_ASSET_RE = /(?:src|href)\s*=\s*["']((?:\/\/|https?:\/\/)[^"']*)/gi;
+
+/** Images hosted with `droppage image upload` are public and stable: not worth a warning. */
+function isHostedImage(url: string): boolean {
+  return url.startsWith(`${resolveShareBaseUrl()}/i/`);
+}
 
 /** Result of a successful upload validation. */
 export interface ValidateHtmlResult {
@@ -101,7 +110,8 @@ export function validateHtmlUpload(
         'they will not resolve in a single-file share. Inline them for a self-contained page.',
     );
   }
-  if (EXTERNAL_ASSET_RE.test(body)) {
+  const external = [...body.matchAll(EXTERNAL_ASSET_RE)].map((m) => m[1]).filter((url) => !isHostedImage(url));
+  if (external.length > 0) {
     warnings.push(
       'HTML references external assets (//host or http(s)://); ' +
         'they must be publicly reachable to render in the shared page.',

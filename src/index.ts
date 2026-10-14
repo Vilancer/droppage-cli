@@ -7,6 +7,10 @@ import { registerUpdate } from './commands/update.js';
 import { registerList } from './commands/list.js';
 import { registerDelete } from './commands/delete.js';
 import { registerRecipients } from './commands/recipients.js';
+import { registerQuota } from './commands/quota.js';
+import { registerFeedback } from './commands/feedback.js';
+import { registerUpgrade } from './commands/upgrade.js';
+import { registerImage } from './commands/image.js';
 
 export function createProgram(): Command {
   const program = new Command()
@@ -23,6 +27,10 @@ export function createProgram(): Command {
   registerList(program);
   registerDelete(program);
   registerRecipients(program);
+  registerQuota(program);
+  registerImage(program);
+  registerFeedback(program);
+  registerUpgrade(program);
 
   return program;
 }

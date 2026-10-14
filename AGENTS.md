@@ -24,9 +24,10 @@ monorepo (`packages/cli/`) and in the public mirror (`Vilancer/droppage-cli`). F
 
 ## 3. Privacy and telemetry
 
-- The CLI collects **no telemetry** and sends nothing to any endpoint other than the configured
-  backend. Do not add analytics, crash reporting, or "phone home" behaviour without an explicit,
-  documented product decision.
+- The CLI collects **no telemetry**. The only non-backend request is the documented, opt-out npm
+  registry release check after command completion; it sends no identifying data and never touches
+  stdout. Do not add analytics, crash reporting, or other "phone home" behaviour without an
+  explicit, documented product decision.
 - Do not log, cache, or transmit the contents of users' HTML files anywhere except the upload call.
 
 ## 4. Dependencies — Package Legitimacy Gate
@@ -50,9 +51,12 @@ The CLI source is published openly. Everything in this package must be safe for 
 
 ## 6. Output contract is a compatibility promise
 
-Agents depend on it: `upload`/`update` print only the URL on stdout; `list --json` and
-`recipients list --json` print only JSON on stdout; everything human goes to stderr; failures exit
-non-zero. Changing this is a breaking change and needs a major version bump.
+Agents depend on it: `upload`/`update` print only the URL on stdout, even when they upload the
+page's images (the per-image `droppage: image … → …` lines go to stderr); `expire` prints nothing on
+stdout, only a confirmation on stderr; `list --json`, `recipients list --json`, and `quota --json`
+print only JSON on stdout; `feedback` prints only the submission id on stdout; `image upload` prints
+only the image URL(s) (`image list --json` only JSON); everything human goes to stderr; failures
+exit non-zero. Changing this is a breaking change and needs a major version bump.
 
 ## 7. Releases
 

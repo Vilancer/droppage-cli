@@ -41,6 +41,7 @@ test('pageTableCells maps a PageRow into the exact column order used by list', (
     view_count: 42,
     created_at: '2026-08-01T10:00:00.000Z',
     last_viewed_at: null,
+    expires_at: null,
   };
   expect(pageTableCells(row)).toEqual([
     'abc123',
@@ -48,5 +49,6 @@ test('pageTableCells maps a PageRow into the exact column order used by list', (
     '2026-08-01',
     '42',
     '—',
+    'never',
   ]);
 });

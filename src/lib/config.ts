@@ -6,9 +6,34 @@ import type { SupportedStorage } from '@supabase/supabase-js';
 const FORBIDDEN = /service_role|sb_secret/i;
 
 type DroppageConfStore = Record<string, string>;
+type UpdateCheckStore = {
+  lastCheckedAt?: string;
+  latest?: string;
+};
 
-let confInstance: Conf<DroppageConfStore> | undefined;
-let confHome: string | undefined;
+type ConfSlot<T extends Record<string, unknown>> = {
+  instance?: Conf<T>;
+  home?: string;
+};
+
+const sessionConf: ConfSlot<DroppageConfStore> = {};
+const updateCheckConf: ConfSlot<UpdateCheckStore> = {};
+
+function confAt<T extends Record<string, unknown>>(
+  slot: ConfSlot<T>,
+  configName: string,
+): Conf<T> {
+  const home = homedir();
+  if (!slot.instance || slot.home !== home) {
+    slot.home = home;
+    slot.instance = new Conf<T>({
+      cwd: join(home, '.droppage'),
+      configName,
+      configFileMode: 0o600,
+    });
+  }
+  return slot.instance;
+}
 
 /** Path to session-only config: ~/.droppage/config.json (D-08, CLI-02). */
 export function getDroppageConfigPath(): string {
@@ -35,16 +60,12 @@ export function validateConfig(data: Record<string, unknown>): void {
 
 /** Conf singleton scoped to current homedir (session tokens only — never URL/anon). */
 export function getConf(): Conf<DroppageConfStore> {
-  const home = homedir();
-  if (!confInstance || confHome !== home) {
-    confHome = home;
-    confInstance = new Conf<DroppageConfStore>({
-      cwd: join(home, '.droppage'),
-      configName: 'config',
-      configFileMode: 0o600,
-    });
-  }
-  return confInstance;
+  return confAt(sessionConf, 'config');
+}
+
+/** Non-identifying npm release cache: ~/.droppage/update-check.json. */
+export function getUpdateCheckConf(): Conf<UpdateCheckStore> {
+  return confAt(updateCheckConf, 'update-check');
 }
 
 /**

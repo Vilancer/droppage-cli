@@ -13,3 +13,5 @@ if (nodeMajor < MIN_NODE_MAJOR) {
 const { createProgram } = await import('./index.js');
 const program: Command = createProgram();
 await program.parseAsync(process.argv);
+const { checkForUpdate } = await import('./lib/update-check.js');
+await checkForUpdate();

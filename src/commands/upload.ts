@@ -1,6 +1,8 @@
 import { password as passwordPrompt } from '@inquirer/prompts';
 import type { Command } from 'commander';
 import { hashPassword } from '../lib/password.js';
+import { parseExpiry } from '../lib/duration.js';
+import { attachLocalImages, hasLocalImages } from '../services/page-images.js';
 import { AuthRequiredError, emailSchema, requireAuth } from '../services/auth.js';
 import { type AccessMode, upload } from '../services/upload.js';
 
@@ -24,10 +26,11 @@ export function registerUpload(program: Command): void {
     // ACC-03 / D-04/D-06: boolean flag — owner-only draft. Self-allowlists the
     // authenticated user's own email; anonymous visitors are blocked.
     .option('--private', 'restrict access to only you (owner-only draft)')
+    .option('--expires <when>', 'delete the page (and its images) after 30m, 12h, 7d, 2w or on a date')
     .action(
       async (
         file: string,
-        options: { password?: boolean; email?: string[]; private?: boolean },
+        options: { password?: boolean; email?: string[]; private?: boolean; expires?: string },
       ) => {
         // Single auth gate (WR-04): resolve the publisher once here and thread the
         // user into upload(), rather than calling getUser() again in the service.
@@ -118,22 +121,33 @@ export function registerUpload(program: Command): void {
           }
 
           // D-10: all status/progress goes to stderr; stdout stays URL-only.
+          const expiresAt = options.expires ? parseExpiry(options.expires) ?? undefined : undefined;
           console.error(`droppage: uploading ${file}...`);
+          // Local <img src="chart.png"> files are uploaded to the page and the
+          // links rewritten, once the page's slug is chosen.
+          const prepare = (await hasLocalImages(file))
+            ? async (slug: string) => (await attachLocalImages(file, slug)).html
+            : undefined;
           const url = await upload({
             file,
             user,
             passwordHash,
             allowedEmails,
             accessMode,
+            prepare,
+            expiresAt,
           });
+          if (expiresAt) console.error(`droppage: expires ${expiresAt.toISOString()}`);
           console.error('droppage: done');
           // stdout carries ONLY the bare URL — pipe-friendly for agents/CI.
           process.stdout.write(url + '\n');
         } catch (err) {
           process.exitCode = 1;
-          console.error(
-            `droppage: upload failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`droppage: upload failed: ${message}`);
+          if (/quota reached|require (Starter|Builder)/i.test(message)) {
+            console.error('run `droppage quota` to see your limits');
+          }
         }
       },
     );

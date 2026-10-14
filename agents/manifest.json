@@ -1,9 +1,19 @@
 {
   "name": "droppage-agent-pack",
-  "version": "0.1.0",
-  "updated_at": "2026-08-11",
+  "version": "0.2.0",
+  "updated_at": "2026-10-14",
   "homepage": "https://droppage.dev",
   "repository": "https://github.com/Vilancer/droppage-cli",
+  "cli": {
+    "npm_package": "droppage",
+    "latest_version_url": "https://registry.npmjs.org/droppage/latest",
+    "min_supported_version": "0.1.1"
+  },
+  "endpoints": {
+    "quota": "https://droppage.dev/api/account",
+    "feedback": "https://droppage.dev/api/feedback",
+    "updates": "https://droppage.dev/updates.json"
+  },
   "instructions": {
     "codex_skill": {
       "path": "agents/droppage-codex",
@@ -22,5 +32,5 @@
       "raw_url": "https://raw.githubusercontent.com/Vilancer/droppage-cli/main/agents/generic/droppage-agent-instructions.md"
     }
   },
-  "refresh_notice": "Agents should check this manifest periodically before using droppage, especially before relying on command syntax or output contracts."
+  "refresh_notice": "At session start or at least weekly, agents should check this manifest and https://droppage.dev/updates.json. Do not subscribe an agent email address or poll either endpoint on every command."
 }

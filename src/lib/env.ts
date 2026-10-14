@@ -25,7 +25,9 @@ function rejectSecrets(label: string, value: string): void {
  * Loads process.cwd()/.env only (D-07) — never ~/.droppage/.env.
  */
 export function resolveSupabaseEnv(): { url: string; anonKey: string } {
-  loadDotenv({ path: join(process.cwd(), '.env') });
+  // `quiet` suppresses dotenv's own stdout banner, which would otherwise
+  // corrupt the machine-readable stdout contract (URL / JSON / id only).
+  loadDotenv({ path: join(process.cwd(), '.env'), quiet: true });
 
   const url =
     process.env.DROPPAGE_SUPABASE_URL ||

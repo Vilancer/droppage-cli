@@ -10,6 +10,14 @@ const signOut = vi.fn();
 const storageUpload = vi.fn();
 const storageRemove = vi.fn();
 const insert = vi.fn();
+const preflight = vi.fn();
+// upload() makes two RPC calls: assert_page_create_allowed (preflight) and
+// create_page_with_entitlements (the authoritative write). Dispatch by name so
+// each has its own mock, and forward both args so assertions on the create call
+// keep reading toHaveBeenCalledWith('create_page_with_entitlements', {...}).
+const rpc = vi.fn((fn: string, args?: unknown) =>
+  fn === 'assert_page_create_allowed' ? preflight(fn, args) : insert(fn, args),
+);
 const storageFrom = vi.fn(() => ({
   upload: storageUpload,
   remove: storageRemove,
@@ -20,7 +28,7 @@ const createClientMock = vi.fn(() => ({
   auth: { getUser, signOut },
   storage: { from: storageFrom },
   from,
-  rpc: insert,
+  rpc,
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -56,6 +64,11 @@ beforeEach(() => {
   storageUpload.mockReset();
   storageRemove.mockReset();
   insert.mockReset();
+  // mockClear, not mockReset: the dispatcher implementation must survive.
+  rpc.mockClear();
+  preflight.mockReset();
+  // The preflight passes unless a test opts into a denial.
+  preflight.mockResolvedValue({ error: null });
   readFileMock.mockReset();
   process.exitCode = undefined;
 });
@@ -209,6 +222,7 @@ test('rejects a non-.html file before any network call', async () => {
   // Validation is pure and runs before any Supabase call.
   expect(storageUpload).not.toHaveBeenCalled();
   expect(insert).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalled();
 });
 
 test('rejects renamed non-HTML content before any network call', async () => {
@@ -218,6 +232,7 @@ test('rejects renamed non-HTML content before any network call', async () => {
   await expect(upload({ file: 'report.html', user: TEST_USER })).rejects.toThrow(/html/i);
   expect(storageUpload).not.toHaveBeenCalled();
   expect(insert).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalled();
 });
 
 test('on a 23505 slug collision, removes the orphan object and retries', async () => {
@@ -356,4 +371,126 @@ test('propagates a storage upload error and never inserts a row', async () => {
     message: 'bucket denied',
   });
   expect(insert).not.toHaveBeenCalled();
+});
+
+test('runs the create preflight before any storage write', async () => {
+  authAsUser();
+  readFileMock.mockResolvedValue(Buffer.from('<!doctype html><body><h1>hi</h1></body>'));
+  storageUpload.mockResolvedValue({ data: { path: 'p' }, error: null });
+  insert.mockResolvedValue({ error: null });
+
+  const { upload } = await import('./upload.js');
+  await upload({ file: 'a.html', user: TEST_USER });
+
+  expect(preflight).toHaveBeenCalledWith('assert_page_create_allowed', {
+    p_access_mode: 'public',
+    p_recipient_count: 0,
+  });
+  expect(preflight.mock.invocationCallOrder[0]).toBeLessThan(
+    storageUpload.mock.invocationCallOrder[0],
+  );
+});
+
+test('a denied preflight surfaces the server message and uploads nothing', async () => {
+  authAsUser();
+  readFileMock.mockResolvedValue(Buffer.from('<!doctype html><body><h1>hi</h1></body>'));
+  preflight.mockResolvedValue({
+    error: {
+      code: 'P0001',
+      message: 'page quota reached (5 of 5); delete a page or upgrade',
+    },
+  });
+
+  const { upload } = await import('./upload.js');
+  const failure = upload({ file: 'a.html', user: TEST_USER });
+  await expect(failure).rejects.toMatchObject({
+    message: 'page quota reached (5 of 5); delete a page or upgrade',
+  });
+  // supabase-js hands back a PLAIN object, not an Error. It must be normalized
+  // here or the command's `String(err)` fallback prints "[object Object]" and
+  // the server's wording (plus the quota hint keyed off it) is lost.
+  await expect(failure).rejects.toBeInstanceOf(Error);
+  // The whole point of the preflight: no wasted body upload, no orphan object,
+  // no row, and nothing to clean up.
+  expect(storageUpload).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+  expect(storageRemove).not.toHaveBeenCalled();
+});
+
+test('the preflight runs once even when slug collisions force retries', async () => {
+  authAsUser();
+  readFileMock.mockResolvedValue(Buffer.from('<!doctype html><body><h1>hi</h1></body>'));
+  storageUpload.mockResolvedValue({ data: { path: 'p' }, error: null });
+  storageRemove.mockResolvedValue({ data: null, error: null });
+  insert
+    .mockResolvedValueOnce({ error: { code: '23505' } })
+    .mockResolvedValueOnce({ error: { code: '23505' } })
+    .mockResolvedValueOnce({ error: null });
+
+  const { upload } = await import('./upload.js');
+  await upload({ file: 'a.html', user: TEST_USER });
+
+  expect(preflight).toHaveBeenCalledTimes(1);
+  expect(storageUpload).toHaveBeenCalledTimes(3);
+});
+
+test.for([
+  {
+    label: 'password',
+    args: { passwordHash: '$2a$10$hash' },
+    expected: { p_access_mode: 'password', p_recipient_count: 0 },
+  },
+  {
+    label: 'email',
+    args: {
+      accessMode: 'email' as const,
+      allowedEmails: ['a@example.com', 'b@example.com'],
+    },
+    expected: { p_access_mode: 'email', p_recipient_count: 2 },
+  },
+  {
+    label: 'private',
+    args: { accessMode: 'private' as const, allowedEmails: ['owner@example.com'] },
+    expected: { p_access_mode: 'private', p_recipient_count: 1 },
+  },
+])('the preflight carries the resolved access mode and recipient count: $label', async ({ args, expected }) => {
+  authAsUser();
+  readFileMock.mockResolvedValue(Buffer.from('<!doctype html><body><h1>hi</h1></body>'));
+  storageUpload.mockResolvedValue({ data: { path: 'p' }, error: null });
+  insert.mockResolvedValue({ error: null });
+
+  const { upload } = await import('./upload.js');
+  await upload({ file: 'a.html', user: TEST_USER, ...args });
+
+  expect(preflight).toHaveBeenCalledWith('assert_page_create_allowed', expected);
+});
+
+test('a storage RLS denial after a passing preflight gets quota guidance', async () => {
+  authAsUser();
+  readFileMock.mockResolvedValue(Buffer.from('<!doctype html><body><h1>hi</h1></body>'));
+  storageUpload.mockResolvedValue({
+    data: null,
+    error: { message: 'new row violates row-level security policy' },
+  });
+
+  const { upload } = await import('./upload.js');
+  const failure = upload({ file: 'a.html', user: TEST_USER });
+  // The server's own text is preserved; the CLI adds a pointer, not a diagnosis.
+  await expect(failure).rejects.toThrow(/new row violates row-level security policy/);
+  await expect(failure).rejects.toThrow(/droppage quota/);
+  expect(insert).not.toHaveBeenCalled();
+});
+
+test('an unrelated storage error keeps its raw message and gains no quota hint', async () => {
+  authAsUser();
+  readFileMock.mockResolvedValue(Buffer.from('<!doctype html><body><h1>hi</h1></body>'));
+  storageUpload.mockResolvedValue({
+    data: null,
+    error: { message: 'bucket denied' },
+  });
+
+  const { upload } = await import('./upload.js');
+  await expect(upload({ file: 'a.html', user: TEST_USER })).rejects.not.toThrow(
+    /droppage quota/,
+  );
 });

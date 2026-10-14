@@ -126,7 +126,7 @@ test('login OTP flow never opens loopback emailRedirectTo as magic link', async 
   logSpy.mockRestore();
 });
 
-test('login opens Inbucket for local Supabase, not the callback URL', async () => {
+function mockLocalLogin() {
   getUser.mockResolvedValue({ data: { user: null }, error: null });
   resolveSupabaseEnvMock.mockReturnValue({
     url: 'http://127.0.0.1:54321',
@@ -141,6 +141,13 @@ test('login opens Inbucket for local Supabase, not the callback URL', async () =
     error: null,
   });
   openMock.mockResolvedValue(undefined);
+}
+
+test('login opens Inbucket for local Supabase, not the callback URL', async () => {
+  // This runs in CI too, where CI=true would (correctly) suppress the browser.
+  vi.stubEnv('CI', '');
+  vi.stubEnv('DROPPAGE_NO_BROWSER', '');
+  mockLocalLogin();
 
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   const { login } = await import('./auth.js');
@@ -151,6 +158,21 @@ test('login opens Inbucket for local Supabase, not the callback URL', async () =
     expect.stringMatching(/\/callback/),
   );
   logSpy.mockRestore();
+  vi.unstubAllEnvs();
+});
+
+test('DROPPAGE_NO_BROWSER keeps a local login from opening a browser', async () => {
+  vi.stubEnv('CI', '');
+  vi.stubEnv('DROPPAGE_NO_BROWSER', '1');
+  mockLocalLogin();
+
+  const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const { login } = await import('./auth.js');
+  await login();
+
+  expect(openMock).not.toHaveBeenCalled();
+  logSpy.mockRestore();
+  vi.unstubAllEnvs();
 });
 
 test('login does not arm the callback waiter when OTP send fails (CR-01)', async () => {

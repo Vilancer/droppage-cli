@@ -465,3 +465,70 @@ test('billing entitlements default to Free, enforce its monthly meter, and bypas
     await admin!.auth.admin.deleteUser(freeId);
   }
 });
+
+// Runs LAST: it temporarily strips this tracer user's admin bypass, which the
+// preceding test asserts is present.
+test('page limit: the create preflight raises the friendly quota error and leaves no orphan', async (ctx) => {
+  if (!hasEnv || !reachable) {
+    console.warn(skipReason());
+    ctx.skip();
+    return;
+  }
+
+  // The tracer user is an admin (quota_bypassed, page_limit null), so the Free
+  // gate is unreachable as-is. Pin a page_limit of 1 and drop the bypass.
+  const override = await admin!.from('entitlement_overrides').insert({
+    user_id: userId,
+    page_limit: 1,
+    reason: 'page-limit preflight integration test',
+    created_by: userId,
+  });
+  expect(override.error).toBeNull();
+  const demoted = await admin!.from('admin_users').delete().eq('user_id', userId);
+  expect(demoted.error).toBeNull();
+
+  try {
+    const { data: pagesBefore } = await admin!
+      .from('pages')
+      .select('slug, storage_path')
+      .eq('owner_id', userId);
+    // Earlier tests in this file already published well past the pinned limit.
+    expect((pagesBefore ?? []).length).toBeGreaterThan(1);
+    const { data: objectsBefore } = await admin!.storage.from(BUCKET).list(userId);
+
+    const filePath = join(tmpDir, 'over-limit.html');
+    await writeFile(filePath, '<!doctype html><h1>over limit</h1>', 'utf8');
+
+    const { upload } = await import('./upload.js');
+    await expect(
+      upload({ file: filePath, user: testUser! }),
+    ).rejects.toThrow(/page quota reached \(\d+ of 1\); delete a page or upgrade/);
+
+    // Preflight fired BEFORE the storage write: no orphan object, no new row,
+    // and no generic "row-level security" text reached the caller.
+    const { data: objectsAfter } = await admin!.storage.from(BUCKET).list(userId);
+    expect((objectsAfter ?? []).length).toBe((objectsBefore ?? []).length);
+    const { data: pagesAfter } = await admin!
+      .from('pages')
+      .select('slug')
+      .eq('owner_id', userId);
+    expect((pagesAfter ?? []).length).toBe((pagesBefore ?? []).length);
+
+    // The authoritative write agrees with the preflight — this is what keeps the
+    // two from drifting after the shared-assertion refactor.
+    const { createSupabaseClient } = await import('../lib/supabase.js');
+    const direct = await createSupabaseClient().rpc('create_page_with_entitlements', {
+      p_slug: `over-limit-${randomUUID().slice(0, 8)}`,
+      p_storage_path: `${userId}/never-written.html`,
+      p_access_mode: 'public',
+      p_password_hash: null,
+      p_allowed_emails: null,
+    });
+    expect(direct.error?.message).toMatch(
+      /page quota reached \(\d+ of 1\); delete a page or upgrade/,
+    );
+  } finally {
+    await admin!.from('entitlement_overrides').delete().eq('user_id', userId);
+    await admin!.from('admin_users').insert({ user_id: userId });
+  }
+});

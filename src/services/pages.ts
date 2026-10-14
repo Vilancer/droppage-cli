@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { User } from '@supabase/supabase-js';
 import { buildShareUrl } from '../lib/share-url.js';
+import { asError } from '../lib/supabase-error.js';
 import { createSupabaseClient } from '../lib/supabase.js';
 import { validateHtmlUpload } from '../lib/validate-html.js';
 import type { AccessMode } from './upload.js';
@@ -17,6 +18,7 @@ export type PageRow = {
   view_count: number;
   created_at: string;
   last_viewed_at: string | null;
+  expires_at: string | null;
 };
 
 type DeleteOk = { ok: true; blobWasAbsent: boolean };
@@ -34,7 +36,7 @@ export async function listPages(user: User): Promise<PageRow[]> {
   const { data, error } = await supabase
     .from('pages')
     .select(
-      'slug, access_mode, allowed_emails, view_count, created_at, last_viewed_at',
+      'slug, access_mode, allowed_emails, view_count, created_at, last_viewed_at, expires_at',
     )
     .eq('owner_id', user.id)
     .order('created_at', { ascending: false });
@@ -97,12 +99,15 @@ export async function updatePageHtml({
   slug,
   file,
   user,
+  html,
 }: {
   slug: string;
   file: string;
   user: User;
+  /** The HTML to store, when the caller already rewrote it (image links). */
+  html?: Buffer;
 }): Promise<UpdatePageResult> {
-  const bytes = await readFile(file);
+  const bytes = html ?? (await readFile(file));
   const { warnings } = validateHtmlUpload(file, bytes);
   for (const warning of warnings) {
     console.error(`droppage: warning: ${warning}`);
@@ -112,7 +117,7 @@ export async function updatePageHtml({
   const preflight = await supabase.rpc('assert_page_update_allowed', {
     p_slug: slug,
   });
-  if (preflight.error) throw preflight.error;
+  if (preflight.error) throw asError(preflight.error);
   const { data: row, error: selectError } = await supabase
     .from('pages')
     .select('slug, storage_path')
@@ -143,4 +148,20 @@ export async function updatePageHtml({
     storagePath,
     url: buildShareUrl(slug),
   };
+}
+
+/** Set (a Date) or clear (null) when a page expires. */
+export async function setPageExpiry(slug: string, expiresAt: Date | null): Promise<void> {
+  const supabase = createSupabaseClient();
+  const { error } = await supabase.rpc('set_page_expiry', {
+    p_slug: slug,
+    p_expires_at: expiresAt ? expiresAt.toISOString() : null,
+  });
+  if (error) throw asError(error);
+}
+
+/** The server's update check, so nothing (images included) is uploaded for an update that would be refused. */
+export async function assertUpdateAllowed(slug: string): Promise<void> {
+  const { error } = await createSupabaseClient().rpc('assert_page_update_allowed', { p_slug: slug });
+  if (error) throw asError(error);
 }

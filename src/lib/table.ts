@@ -8,6 +8,7 @@ export const PAGE_TABLE_HEADERS = [
   'CREATED',
   'VIEWS',
   'LAST VIEWED',
+  'EXPIRES',
 ] as const;
 
 export const PAGE_TABLE_ALIGN = [
@@ -15,6 +16,7 @@ export const PAGE_TABLE_ALIGN = [
   'left',
   'left',
   'right',
+  'left',
   'left',
 ] as const;
 
@@ -61,5 +63,6 @@ export function pageTableCells(row: PageRow): string[] {
     formatDateCell(row.created_at),
     String(row.view_count),
     formatDateCell(row.last_viewed_at),
+    row.expires_at ? row.expires_at.slice(0, 16).replace('T', ' ') : 'never',
   ];
 }

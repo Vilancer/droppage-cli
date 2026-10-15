@@ -56,6 +56,10 @@ Open the printed link in any browser. That's it.
 
 Run `droppage <command> --help` for full option details.
 
+Slugs from 0.2.1 on never start with `-`. If an older page's slug does (say `-AbC12xYz9`), put `--` in front of
+it, with any options before the `--`: `droppage expire -- -AbC12xYz9 never` or
+`droppage update --expires 7d -- -AbC12xYz9 report.html`. The CLI prints the same hint when it happens.
+
 ## Access modes
 
 | Upload flag | Mode | Who can open the link |
@@ -127,6 +131,25 @@ After expiry the page shows "This page has expired." (HTTP 410) to everyone, inc
 its images stop working. A daily cleanup then deletes the page and its images for good.
 `droppage list` shows an EXPIRES column (`never` or a date); `list --json` rows have `expires_at`
 (`null` means never).
+
+## Sharing reports and dashboards
+
+droppage is a quick way to send an analysis to people who don't have your tools: a dashboard for your
+team, a weekly KPI or stakeholder report, a client deliverable, a notebook export. They open a link.
+
+- **Export one HTML file**, up to 5 MB, with the data inside it: `jupyter nbconvert --to html
+  analysis.ipynb`, Plotly's `fig.write_html("report.html", include_plotlyjs="cdn")`, Altair's
+  `chart.save("report.html")`, or your own Chart.js / ECharts page. Scripts run, so interactive
+  charts work, and chart libraries can load from a CDN.
+- **Pages run in a sandbox**: `localStorage`, cookies, and same-origin requests are not available, so
+  keep the data in the file rather than fetching it.
+- **Pick who sees it.** `--email cfo@example.com,ops@example.com` for named people (Builder; manage
+  them later with `droppage recipients`), `--password` for a group link (Starter and Builder),
+  `--private` for a draft. On the Free plan, pages can be public or private, without a password or email list.
+- **Same link every week.** `droppage update <slug> report.html` replaces the report and keeps the
+  link and its access settings (Starter and Builder). Use `--expires 30d` for one-off deliverables.
+- **Views are people.** `droppage list --json` shows `view_count` (unique visitors) and
+  `last_viewed_at` for each report.
 
 ## For agents and scripts
 

@@ -11,6 +11,7 @@ import { registerQuota } from './commands/quota.js';
 import { registerFeedback } from './commands/feedback.js';
 import { registerUpgrade } from './commands/upgrade.js';
 import { registerImage } from './commands/image.js';
+import { dashSlugHint } from './lib/slug.js';
 
 export function createProgram(): Command {
   const program = new Command()
@@ -18,7 +19,9 @@ export function createProgram(): Command {
     .description(
       'Publish HTML files as shareable, access-controlled live pages',
     )
-    .version(pkg.version);
+    .version(pkg.version)
+    // Set before the subcommands are registered: they copy these settings.
+    .configureOutput({ outputError: (str, write) => write(str + dashSlugHint(str)) });
 
   registerLogin(program);
   registerLogout(program);

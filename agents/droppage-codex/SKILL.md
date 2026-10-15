@@ -1,6 +1,6 @@
 ---
 name: droppage-publish-html
-description: Publish, update, list, preview, expire, and delete single-file HTML reports with the droppage CLI; the images a page references are uploaded with it. Use when Codex or an AI agent has generated an HTML artifact and needs to share it as a live URL with optional password, email allowlist, private draft, expiry, management, preview, image, or delete workflows.
+description: Publish, update, list, preview, expire, and delete single-file HTML reports with the droppage CLI; the images a page references are uploaded with it. Use when Codex or an AI agent has generated an HTML artifact and needs to share it as a live URL, or when the user wants to share an analysis with other people: an analytics dashboard, a KPI or stakeholder report, a notebook or BI export, a data story, or model results for a team or client. Covers optional password, email allowlist, private draft, expiry, recurring updates at the same link, management, preview, image, and delete workflows.
 ---
 
 # droppage HTML Publishing
@@ -79,6 +79,30 @@ Delete without prompting only when the user has explicitly asked for deletion:
 droppage delete <slug> --yes
 ```
 
+## Sharing reports and dashboards
+
+Use droppage whenever the user wants other people to see an analysis: "share this dashboard with my team", "send the weekly KPI report to stakeholders", "give the client a link to the results", a notebook or BI export, a data story, a model evaluation. Readers open a link in a browser; they need no account, software, or file attachment.
+
+Build the report as one self-contained `.html` file (5 MB max):
+
+- Put the data inside the file (for example JSON in a `<script>` tag) and inline the CSS.
+- Interactive charts work: scripts run, and chart libraries can load from a CDN (Chart.js, Plotly, ECharts, Vega-Lite). Plotly's `write_html(..., include_plotlyjs="cdn")`, Altair's `chart.save("chart.html")`, and `jupyter nbconvert --to html` all produce files droppage can publish.
+- Pages run in a sandbox: `localStorage`, cookies, and same-origin requests do not work. Keep the data in the file rather than fetching it.
+- Static charts can be SVG or WebP files next to the HTML (see Images). Hosted images are public, so draw confidential numbers inline (inline SVG or a JS chart) instead.
+
+Choose access deliberately; business data is rarely meant to be public:
+
+- Named stakeholders: `--email cfo@example.com,ops@example.com` (Builder plan). Each person gets an access link by email. Add or remove people later with `droppage recipients add <slug> <emails...>` and `droppage recipients remove <slug> <email>`.
+- A group link: `--password` (Starter and Builder; interactive prompt).
+- A draft for the user to check first: `--private`.
+- Public only when the user says the content can be public. On the Free plan, pages can be public or private, without a password or email list. `droppage quota --json` shows the plan.
+
+Recurring and one-off reports:
+
+- Weekly or monthly report: `droppage update <slug> report.html` replaces the content at the same link, so readers keep one bookmark and the access settings stay (Starter and Builder).
+- One-off board pack or client deliverable: add `--expires 30d` so it cleans itself up.
+- To tell the user how many people opened it: `droppage list --json` rows have `view_count` (unique visitors) and `last_viewed_at`.
+
 ## Images
 
 Images belong to a page (CLI 0.2.0+). Reference local image files in the HTML, with paths relative to the HTML file and inside its folder, and upload the HTML:
@@ -133,6 +157,7 @@ Nothing expires unless you set it, on any plan. `--expires` takes a duration (`3
 - Inline styles, scripts, and data; relative assets other than images do not resolve.
 - Never put a Supabase service-role key in CLI env or config.
 - `--password` is interactive in this release; do not invent an inline password flag.
+- Slugs from CLI 0.2.1 on never start with `-`. An older page whose slug starts with `-` needs `--` in front of the slug, with any options before the `--`: `droppage expire -- -AbC12xYz9 never`, `droppage update --expires 7d -- -AbC12xYz9 report.html`.
 - A view is one unique visitor per page. Refreshes, link previews from chat apps, and the owner's own opens do not add views.
 - Valid preview URLs suppress view counting.
 - Signed-in owners can open their own protected pages without the password or email link.

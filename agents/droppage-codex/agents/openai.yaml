@@ -1,5 +1,5 @@
 interface:
   display_name: "droppage HTML publishing"
-  short_description: "Publish, update, expire, and manage HTML reports with droppage; their images go up with them."
+  short_description: "Share HTML reports and analytics dashboards as live links with droppage; their images go up with them."
   default_prompt: "Use $droppage-publish-html to publish or manage this HTML artifact with droppage."
   brand_color: "#00A9A5"

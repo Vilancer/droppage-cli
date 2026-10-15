@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import pkg from '../../package.json' with { type: 'json' };
 
 const getSession = vi.fn();
 vi.mock('../lib/supabase.js', () => ({
@@ -22,7 +23,7 @@ test('submits anonymously when no session exists', async () => {
   vi.stubGlobal('fetch', fetchMock);
   const { submitFeedback } = await import('./feedback.js');
   const result = await submitFeedback({
-    message: 'An idea', kind: 'idea', actor: 'human', source: 'cli', cli_version: '0.2.0',
+    message: 'An idea', kind: 'idea', actor: 'human', source: 'cli', cli_version: pkg.version,
   });
   expect(result.id).toBe('f-1');
   expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
@@ -34,7 +35,7 @@ test('attaches a bearer token when a session exists', async () => {
   vi.stubGlobal('fetch', fetchMock);
   const { submitFeedback } = await import('./feedback.js');
   await submitFeedback({
-    message: 'A bug', kind: 'bug', actor: 'agent', model: 'test-model', source: 'cli', cli_version: '0.2.0',
+    message: 'A bug', kind: 'bug', actor: 'agent', model: 'test-model', source: 'cli', cli_version: pkg.version,
   });
   expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer jwt-1');
 });
@@ -43,6 +44,6 @@ test('surfaces server errors with status', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ error: 'too many' }, { status: 429 })));
   const { submitFeedback } = await import('./feedback.js');
   await expect(submitFeedback({
-    message: 'Again', kind: 'other', actor: 'human', source: 'cli', cli_version: '0.2.0',
+    message: 'Again', kind: 'other', actor: 'human', source: 'cli', cli_version: pkg.version,
   })).rejects.toMatchObject({ status: 429, message: 'too many' });
 });

@@ -120,6 +120,7 @@ droppage upload report.html
 `upload` finds the local images, uploads them to that page, rewrites the links to `https://droppage.dev/i/<id>.<ext>`, then publishes. stdout is still only the page URL.
 
 - `droppage update <slug> report.html` uploads any new local images, keeps the same URL for an unchanged image, and deletes the page's images the new HTML no longer uses.
+- From CLI 0.2.2, `upload` and `update` also pick up local images in `srcset` (every candidate, descriptors kept, e.g. `<picture><source srcset="hero-m.webp 1x, hero-l.webp 2x">`), icon links (`<link rel="icon" href="favicon.png">`, `apple-touch-icon`), and `url(...)` inside `<style>` blocks. Same folder rule. Not picked up: `style="..."` attributes and `.ico` files.
 - Deleting a page, or the page expiring, removes its images too. Images never outlive their page.
 - Image budget per page by plan: Free 5 MB, Starter 20 MB, Builder 50 MB. Each image up to 4 MB. PNG, JPEG, GIF, WebP, AVIF, SVG. Image traffic counts toward the account's monthly bandwidth.
 - Prefer small formats: WebP or AVIF for photos and screenshots, SVG for charts and logos (often several times smaller than PNG or JPEG). When you generate images, produce WebP, AVIF, or SVG. The CLI prints a tip on stderr when a PNG, JPEG, or GIF is over 300 KB.

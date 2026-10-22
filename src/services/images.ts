@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 
@@ -132,11 +133,16 @@ export async function deleteImage(idOrUrl: string): Promise<string> {
   return id;
 }
 
-/** Ask the server to delete a page's images its stored HTML no longer references. */
-export async function pruneImages(slug: string): Promise<number> {
+/**
+ * Ask the server to delete a page's images its stored HTML no longer references.
+ * `html` is what was just stored: the server only prunes once the HTML it reads
+ * back has this SHA-256, so a stale read of the previous HTML deletes nothing.
+ */
+export async function pruneImages(slug: string, html?: Buffer): Promise<number> {
   const body = await call(`/api/pages/${encodeURIComponent(slug)}/images/prune`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${await accessToken()}` },
+    headers: { Authorization: `Bearer ${await accessToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(html ? { html_sha256: createHash('sha256').update(html).digest('hex') } : {}),
   });
   return Number((body as { removed?: number } | null)?.removed ?? 0);
 }

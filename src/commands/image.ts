@@ -36,7 +36,7 @@ function fail(err: unknown): void {
 export function registerImage(program: Command): void {
   const image = program
     .command('image')
-    .description('Images that belong to a page (uploaded automatically by upload/update from local <img src> files)');
+    .description('Images that belong to a page (uploaded automatically by upload/update from local files the HTML references)');
 
   image
     .command('upload')
@@ -95,7 +95,7 @@ export function registerImage(program: Command): void {
 
   image
     .command('delete')
-    .description('Delete images (by id or URL); a browser that already loaded one may keep it up to a day')
+    .description('Delete images (by id or URL); they stop being served within 5 minutes; a browser that already loaded one may keep it up to a day')
     .argument('<images...>', 'image ids or URLs')
     .action(async (ids: string[]) => {
       if (!(await signedIn())) return;

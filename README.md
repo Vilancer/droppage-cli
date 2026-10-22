@@ -49,7 +49,7 @@ Open the printed link in any browser. That's it.
 | `droppage recipients resend <slug> <email>` | Queue a fresh invitation for an existing recipient. |
 | `droppage image upload <files...> --page <slug>` | Advanced: add images (PNG, JPEG, GIF, WebP, AVIF, SVG; up to 4 MB each) to an existing page and print their URLs. `--json` prints `[{file,id,url,bytes,content_type,existing}]`. |
 | `droppage image list [--page <slug>]` | List your pages' images; with `--page`, one page and its image budget. `--json` for machines. |
-| `droppage image delete <id-or-url...>` | Delete images. Cached copies may still show for up to a day. |
+| `droppage image delete <id-or-url...>` | Delete images. They stop being served within 5 minutes; a browser that already loaded one may keep it up to a day. |
 | `droppage quota` | Show the current plan, page usage, monthly meter, reset date, and enabled features. `--json` returns the account API body. |
 | `droppage feedback <message>` | Send feedback without requiring login. Options: `--kind idea|bug|review|other`, `--agent [model]`, `--contact <email>`, review-only `--rating <1-5>` and `--allow-quote`. Quote permission never publishes automatically. |
 | `droppage upgrade` | Install the latest CLI globally with npm and report the installed version. |
@@ -104,6 +104,9 @@ only the page URL.
 
 - `update` uploads any new local images, keeps the same URL for an unchanged image, and deletes
   the page's images the new HTML no longer uses.
+- Besides `<img src>`, the CLI picks up local images in `srcset` on `<img>`/`<source>` (every
+  candidate, descriptors kept), `<link rel="icon"|"apple-touch-icon" href>`, and `url(...)` inside
+  `<style>` blocks (0.2.2+). Not picked up: `style="..."` attributes and `.ico` files.
 - Deleting a page, or the page expiring, removes its images too. Images never outlive their page.
 - Image budget per page by plan: Free 5 MB, Starter 20 MB, Builder 50 MB. Each image up to 4 MB.
   PNG, JPEG, GIF, WebP, AVIF, SVG. Image traffic counts toward your monthly bandwidth.

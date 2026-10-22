@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import { findLocalImages, rewriteImageRefs } from '../lib/html-images.js';
-import { pruneImages, uploadImage, type UploadedImage } from './images.js';
+import { ImageRequestError, pruneImages, uploadImage, type UploadedImage } from './images.js';
 
 /**
  * Upload the local images a page's HTML uses (`<img src="chart.png">`) to that
@@ -37,8 +37,18 @@ export async function hasLocalImages(file: string): Promise<boolean> {
 /**
  * After an update: the server deletes the page's images its new HTML no longer
  * references (it reads the stored HTML itself, so every image is considered and
- * absolute or root-relative /i/ links both count as used).
+ * absolute or root-relative /i/ links both count as used). `html` is the HTML
+ * just stored; the server prunes only once it reads back exactly that. If it
+ * can't yet (409), nothing is deleted and the update still succeeds.
  */
-export async function pruneUnusedImages(slug: string): Promise<number> {
-  return pruneImages(slug);
+export async function pruneUnusedImages(slug: string, html?: Buffer): Promise<number> {
+  try {
+    return await pruneImages(slug, html);
+  } catch (err) {
+    if (err instanceof ImageRequestError && err.status === 409) {
+      console.error(`droppage: warning: unused images were kept (${err.message}); the next update removes them`);
+      return 0;
+    }
+    throw err;
+  }
 }

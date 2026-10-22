@@ -44,6 +44,7 @@ Authenticate once with `droppage login` (magic link sent to the user's email).
    # stdout: https://droppage.dev/p/k3x9qd2m
    ```
    PNG, JPEG, GIF, WebP, AVIF, SVG, up to 4 MB each. Budget per page: Free 5 MB, Starter 20 MB, Builder 50 MB. Image traffic counts toward monthly bandwidth. `update` uploads new images, keeps the same URL for an unchanged image, and deletes the ones the new HTML no longer uses. Deleting a page, or the page expiring, removes its images too.
+   From CLI 0.2.2 the CLI also picks up local images in `srcset` (every candidate, descriptors kept), `<link rel="icon"|"apple-touch-icon" href>`, and `url(...)` inside `<style>` blocks (not `style="..."` attributes or `.ico` files).
    Prefer small formats: WebP or AVIF for photos and screenshots, SVG for charts and logos. When you generate images, produce WebP, AVIF, or SVG. The CLI prints a tip on stderr when a PNG, JPEG, or GIF is over 300 KB.
 9. Advanced: add images to an existing page, or inspect and remove them:
    ```bash

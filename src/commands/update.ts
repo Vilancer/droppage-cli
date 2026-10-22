@@ -30,7 +30,7 @@ export function registerUpdate(program: Command): void {
         validateHtmlUpload(file, await readFile(file));
         const { html } = await attachLocalImages(file, slug, { update: true });
         const result = await updatePageHtml({ slug, file, user, html });
-        const removed = await pruneUnusedImages(slug);
+        const removed = await pruneUnusedImages(slug, html);
         if (removed) console.error(`droppage: removed ${removed} image(s) the page no longer uses`);
         if (expiresAt !== undefined) {
           await setPageExpiry(slug, expiresAt);

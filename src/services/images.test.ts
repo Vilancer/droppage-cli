@@ -66,3 +66,24 @@ test('delete accepts an id, id.ext or a full URL', async () => {
   expect(imageIdFrom('https://droppage.dev/p/abc')).toBeNull();
   expect(imageIdFrom('../etc')).toBeNull();
 });
+
+test('prune sends the SHA-256 of the HTML just stored, so a stale server read deletes nothing', async () => {
+  fetchMock.mockResolvedValue(Response.json({ removed: 2, kept: 1 }));
+  const { pruneImages } = await import('./images.js');
+  await expect(pruneImages('Q3report01', Buffer.from('<img src="/i/AAAAAAAAAAAA.png">'))).resolves.toBe(2);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe('https://serve.test/api/pages/Q3report01/images/prune');
+  expect(JSON.parse(init.body)).toEqual({
+    html_sha256: '' + (await import('node:crypto')).createHash('sha256').update('<img src="/i/AAAAAAAAAAAA.png">').digest('hex'),
+  });
+});
+
+test('a prune the server refuses as not yet consistent (409) keeps the images and does not fail the update', async () => {
+  fetchMock.mockResolvedValue(Response.json({ error: 'the stored HTML does not match the update yet; unused images were kept' }, { status: 409 }));
+  const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { pruneUnusedImages } = await import('./page-images.js');
+  await expect(pruneUnusedImages('Q3report01', Buffer.from('<p>x</p>'))).resolves.toBe(0);
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining('unused images were kept'));
+  fetchMock.mockResolvedValue(Response.json({ error: 'could not prune images' }, { status: 500 }));
+  await expect(pruneUnusedImages('Q3report01', Buffer.from('<p>x</p>'))).rejects.toMatchObject({ status: 500 });
+});

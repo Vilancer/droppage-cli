@@ -155,7 +155,7 @@ test('update checks the plan before uploading any image, then attaches images an
   expect(order).toEqual(['check', 'images']);
   expect(updatePageHtmlMock).toHaveBeenCalledWith(expect.objectContaining({ slug: 'abc', html: Buffer.from('<img src="x">') }));
   expect(attachLocalImagesMock).toHaveBeenCalledWith('report.html', 'abc', { update: true });
-  expect(pruneUnusedImagesMock).toHaveBeenCalledWith('abc');
+  expect(pruneUnusedImagesMock).toHaveBeenCalledWith('abc', Buffer.from('<img src="x">'));
   expect(setPageExpiryMock).toHaveBeenCalledWith('abc', expect.any(Date));
 });
 

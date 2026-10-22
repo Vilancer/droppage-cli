@@ -532,3 +532,42 @@ test('page limit: the create preflight raises the friendly quota error and leave
     await admin!.from('admin_users').insert({ user_id: userId });
   }
 });
+
+test('signed-in callers cannot probe other accounts through definer helpers', async (ctx) => {
+  if (!hasEnv || !reachable) {
+    console.warn(skipReason());
+    ctx.skip();
+    return;
+  }
+
+  const other = await admin!.auth.admin.createUser({
+    email: `probe-target-${randomUUID()}@example.com`,
+    email_confirm: true,
+  });
+  if (other.error) throw other.error;
+  const otherId = other.data.user!.id;
+
+  try {
+    const { createSupabaseClient } = await import('../lib/supabase.js');
+    const cli = createSupabaseClient();
+
+    // Quota helpers answer for the caller only; another user's id reads as false.
+    const self = await cli.rpc('account_write_allowed', { p_user_id: userId });
+    expect(self.error).toBeNull();
+    expect(self.data).toBe(true);
+    for (const fn of ['account_write_allowed', 'account_create_allowed', 'account_update_allowed']) {
+      const probe = await cli.rpc(fn, { p_user_id: otherId });
+      expect(probe.error).toBeNull();
+      expect(probe.data).toBe(false);
+    }
+    // The service role keeps the full lookup.
+    const service = await admin!.rpc('account_write_allowed', { p_user_id: otherId });
+    expect(service.data).toBe(true);
+
+    // Not callable as RPC at all.
+    const isAdmin = await cli.rpc('is_droppage_admin', { p_user_id: userId });
+    expect(isAdmin.error?.code).toBe('42501');
+  } finally {
+    await admin!.auth.admin.deleteUser(otherId).catch(() => {});
+  }
+});

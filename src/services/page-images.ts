@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-import { findLocalImages, rewriteImageRefs } from '../lib/html-images.js';
+import { findLocalImages, isVideoFile, rewriteImageRefs } from '../lib/html-images.js';
 import { ImageRequestError, pruneImages, uploadImage, type UploadedImage } from './images.js';
 
 /**
- * Upload the local images a page's HTML uses (`<img src="chart.png">`) to that
+ * Upload the local images and videos a page's HTML uses (`<img src="chart.png">`,
+ * `<video src="film.mp4" poster="still.webp">`, `<source src="film.webm">`) to that
  * page and return the HTML with those links pointing at the hosted copies. The
  * images belong to the page: they go when it is deleted or expires.
  */
@@ -24,7 +25,8 @@ export async function attachLocalImages(
     const result = await uploadImage(image.path, slug, { update });
     urls.set(image.ref, result.url);
     uploaded.push(result);
-    console.error(`droppage: image ${basename(image.path)} → ${result.url}`);
+    const kind = isVideoFile(image.path) ? 'video' : 'image';
+    console.error(`droppage: ${kind} ${basename(image.path)} → ${result.url}`);
   }
   return { html: Buffer.from(rewriteImageRefs(text, urls), 'utf8'), uploaded };
 }

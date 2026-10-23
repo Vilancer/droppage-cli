@@ -38,18 +38,18 @@ Open the printed link in any browser. That's it.
 |---|---|
 | `droppage login` | Authenticate with a magic link (session stored in `~/.droppage/config.json`). |
 | `droppage logout` | Sign out and clear local credentials. |
-| `droppage upload <file>` | Publish an `.html`/`.htm` file (and the local images it references) and print its URL. Options: `--password`, `--email <addr>`, `--private`, `--expires <when>`. |
-| `droppage update <slug> <file>` | Replace the HTML (and images) behind an existing URL. Keeps the URL, access mode, and stats. `--expires <when\|never>` changes the expiry. |
+| `droppage upload <file>` | Publish an `.html`/`.htm` file (and the local images and videos it references) and print its URL. Options: `--password`, `--email <addr>`, `--private`, `--expires <when>`. |
+| `droppage update <slug> <file>` | Replace the HTML (and images and videos) behind an existing URL. Keeps the URL, access mode, and stats. `--expires <when\|never>` changes the expiry. |
 | `droppage expire <slug> <when\|never>` | Set or clear when a page expires without re-uploading. |
 | `droppage list` | List your pages, including an EXPIRES column. `--json` for machines (rows have `expires_at`), `--preview` for no-count preview URLs. |
-| `droppage delete <slug>` | Delete a page and its images. `--yes` skips the confirmation prompt. |
+| `droppage delete <slug>` | Delete a page and its images and videos. `--yes` skips the confirmation prompt. |
 | `droppage recipients list <slug>` | List recipients of an email-gated page (`--json`, `--page <n>`). |
 | `droppage recipients add <slug> <emails...>` | Add recipients and queue their invitation emails. |
 | `droppage recipients remove <slug> <email>` | Revoke a recipient; their invitation link stops working (`--yes`). |
 | `droppage recipients resend <slug> <email>` | Queue a fresh invitation for an existing recipient. |
-| `droppage image upload <files...> --page <slug>` | Advanced: add images (PNG, JPEG, GIF, WebP, AVIF, SVG; up to 4 MB each) to an existing page and print their URLs. `--json` prints `[{file,id,url,bytes,content_type,existing}]`. |
-| `droppage image list [--page <slug>]` | List your pages' images; with `--page`, one page and its image budget. `--json` for machines. |
-| `droppage image delete <id-or-url...>` | Delete images. They stop being served within 5 minutes; a browser that already loaded one may keep it up to a day. |
+| `droppage image upload <files...> --page <slug>` | Advanced: add images (PNG, JPEG, GIF, WebP, AVIF, SVG; up to 4 MB each) or videos (MP4, WebM; up to 20 MB each) to an existing page and print their URLs. Alias: `droppage media upload`. `--json` prints `[{file,id,url,bytes,content_type,existing}]`. |
+| `droppage image list [--page <slug>]` | List your pages' images and videos; with `--page`, one page and its image budget. `--json` for machines. |
+| `droppage image delete <id-or-url...>` | Delete images or videos. They stop being served within 5 minutes; a browser that already loaded one may keep it up to a day. |
 | `droppage quota` | Show the current plan, page usage, monthly meter, reset date, and enabled features. `--json` returns the account API body. |
 | `droppage feedback <message>` | Send feedback without requiring login. Options: `--kind idea|bug|review|other`, `--agent [model]`, `--contact <email>`, review-only `--rating <1-5>` and `--allow-quote`. Quote permission never publishes automatically. |
 | `droppage upgrade` | Install the latest CLI globally with npm and report the installed version. |
@@ -120,6 +120,38 @@ only the page URL.
   `{images:[{id,url,ext,content_type,bytes,name,created_at,page}], page?:{slug,used_bytes,limit_bytes}}`);
   `droppage image delete <id-or-url...>` removes them.
 
+## Videos
+
+Short product films (CLI 0.3.0+) are hosted exactly like images. Reference local MP4 or WebM files,
+and a poster image, in a `<video>`:
+
+```html
+<video autoplay muted loop playsinline poster="still.webp">
+  <source src="film.webm" type="video/webm">
+  <source src="film.mp4" type="video/mp4">
+</video>
+```
+
+```bash
+droppage upload page.html
+# stderr: droppage: image still.webp → https://droppage.dev/i/AbCdEfGhIjKl.webp
+# stderr: droppage: video film.webm → https://droppage.dev/i/MnOpQrStUvWx.webm
+# stderr: droppage: video film.mp4 → https://droppage.dev/i/YzAbCdEfGhIj.mp4
+```
+
+- Picked up: `<video src>`, `<source src>` (inside `<video>`, and `<picture>` as before), and
+  `<video poster>`. Same folder rule as images.
+- Each video up to 20 MB (20,000,000 bytes), checked by its file signature, not its name: MP4
+  (H.264 plays everywhere) and WebM (VP9). `.mov` and `.mkv` are refused; convert them first, e.g.
+  `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p -movflags +faststart -an film.mp4`.
+- Videos share the page's image budget (Free 5 MB, Starter 20 MB, Builder 50 MB per page), are
+  pruned by `update` and deleted with the page, like images. Video traffic counts toward your
+  monthly bandwidth.
+- Served from `https://droppage.dev/i/<id>.mp4|webm` with HTTP Range support (`206 Partial Content`),
+  so Safari, iOS and seeking work. Public to anyone with the URL, like images.
+- No need to inline films as base64 any more. `droppage image upload film.mp4 --page <slug>` (or
+  `droppage media upload`) adds a video to an existing page.
+
 ## Expiry
 
 Pages can expire. Nothing expires unless you set it, on any plan.
@@ -159,9 +191,9 @@ team, a weekly KPI or stakeholder report, a client deliverable, a notebook expor
 droppage keeps a strict stream contract so it is safe to call from automation:
 
 - `upload` and `update` print **only the URL** on stdout, even when they upload images;
-  `image upload` prints **only the image URL(s)**; `expire` prints **nothing** on stdout.
+  `image upload` prints **only the image or video URL(s)**; `expire` prints **nothing** on stdout.
 - `list --json`, `image list --json`, `recipients list --json`, and `quota --json` print **only JSON** on stdout.
-- Progress, warnings, prompts, errors, and the per-image `droppage: image … → …` lines go to **stderr**.
+- Progress, warnings, prompts, errors, and the per-file `droppage: image … → …` / `droppage: video … → …` lines go to **stderr**.
 - Non-zero exit code on any failure.
 - Use `--yes` on `delete` / `recipients remove` for non-interactive runs.
 

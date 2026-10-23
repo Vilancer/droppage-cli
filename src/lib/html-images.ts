@@ -2,12 +2,17 @@ import { existsSync, realpathSync, statSync } from 'node:fs';
 import { dirname, extname, relative, resolve, sep } from 'node:path';
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg']);
-// A real attribute of <img>/<source>: preceded by whitespace, so `data-src` and
+const VIDEO_EXTS = new Set(['.mp4', '.webm']);
+const MEDIA_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
+// A real attribute of one of `tags`: preceded by whitespace, so `data-src` and
 // `data-srcset` never match. Groups: 1 = everything before the value's opening
 // quote, 2 = the quote, 3 = the value.
-const imgAttrRe = (name: string) => new RegExp(`(<(?:img|source)\\b[^>]*?\\s${name}\\s*=\\s*)(["'])([^"']+)\\2`, 'gi');
-const SRC_RE = imgAttrRe('src');
-const SRCSET_RE = imgAttrRe('srcset');
+const attrRe = (tags: string, name: string) =>
+  new RegExp(`(<(?:${tags})\\b[^>]*?\\s${name}\\s*=\\s*)(["'])([^"']+)\\2`, 'gi');
+// <source> covers <video><source src="film.webm"> as well as <picture>.
+const SRC_RE = attrRe('img|source|video', 'src');
+const SRCSET_RE = attrRe('img|source', 'srcset');
+const POSTER_RE = attrRe('video', 'poster');
 const LINK_RE = /<link\b[^>]*>/gi;
 // Any attribute with a value inside a tag. Groups: 1 = name, 3 = quoted value, 4 = bare value.
 const ATTR_RE = /\s([a-z][a-z0-9-]*)\s*=\s*(?:(["'])([^"']*)\2|([^\s"'=<>`]+))/gi;
@@ -16,24 +21,29 @@ const STYLE_RE = /(<style\b[^>]*>)([\s\S]*?)<\/style\s*>/gi;
 // CSS url(): quoted ("…" / '…') or bare. Groups: 1 = "…" value, 2 = '…' value, 3 = bare value.
 const CSS_URL_RE = /\burl\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"'()]+))\s*\)/gi;
 
+/** True for a file the CLI uploads as a video (.mp4, .webm). */
+export const isVideoFile = (path: string) => VIDEO_EXTS.has(extname(path).toLowerCase());
+
 export type LocalImage = { ref: string; path: string };
 
 /** Where one image reference sits in the HTML: the text in [start, end) is `ref`'s slot. */
 type Slot = { start: number; end: number; ref: string };
 
 /**
- * Every place the HTML can point at an image file: `<img|source src>`, each URL
- * in `<img|source srcset>` (descriptors untouched), `<link rel="icon"|
- * "apple-touch-icon" href>`, and `url(...)` inside `<style>` blocks (not in CSS
- * comments). In document order, never overlapping.
+ * Every place the HTML can point at a media file: `<img|source|video src>`,
+ * `<video poster>`, each URL in `<img|source srcset>` (descriptors untouched),
+ * `<link rel="icon"|"apple-touch-icon" href>`, and `url(...)` inside `<style>`
+ * blocks (not in CSS comments). In document order, never overlapping.
  */
 function imageSlots(html: string): Slot[] {
   const slots: Slot[] = [];
   const attrValue = (match: RegExpMatchArray) => ({ start: match.index! + match[1].length + 1, value: match[3] });
 
-  for (const match of html.matchAll(SRC_RE)) {
-    const { start, value } = attrValue(match);
-    slots.push({ start, end: start + value.length, ref: value.trim() });
+  for (const re of [SRC_RE, POSTER_RE]) {
+    for (const match of html.matchAll(re)) {
+      const { start, value } = attrValue(match);
+      slots.push({ start, end: start + value.length, ref: value.trim() });
+    }
   }
   for (const match of html.matchAll(SRCSET_RE)) {
     const { start, value } = attrValue(match);
@@ -113,8 +123,9 @@ function inside(base: string, path: string): boolean {
 }
 
 /**
- * The local image files a page uses (`<img src="chart.png">`, srcset entries,
- * icon links and `url(...)` in `<style>`), relative to the HTML file and inside
+ * The local media files a page uses (`<img src="chart.png">`, srcset entries,
+ * icon links, `url(...)` in `<style>`, and videos: `<video src>`, `<source src>`
+ * inside `<video>`, `<video poster>`), relative to the HTML file and inside
  * its folder, checked on real paths so a symlink can't point elsewhere. URLs,
  * data: URIs, absolute paths and `../` references are skipped, so publishing
  * someone else's HTML can never upload a file from elsewhere on this machine.
@@ -137,7 +148,7 @@ export function findLocalImages(html: string, htmlFile: string): LocalImage[] {
     } catch {
       continue;
     }
-    if (!IMAGE_EXTS.has(extname(decoded).toLowerCase())) continue;
+    if (!MEDIA_EXTS.has(extname(decoded).toLowerCase())) continue;
     const path = resolve(base, decoded);
     if (!inside(base, path) || !existsSync(path)) continue;
     let real: string;

@@ -26,7 +26,7 @@ export function registerUpload(program: Command): void {
     // ACC-03 / D-04/D-06: boolean flag — owner-only draft. Self-allowlists the
     // authenticated user's own email; anonymous visitors are blocked.
     .option('--private', 'restrict access to only you (owner-only draft)')
-    .option('--expires <when>', 'delete the page (and its images) after 30m, 12h, 7d, 2w or on a date')
+    .option('--expires <when>', 'delete the page (and its images and videos) after 30m, 12h, 7d, 2w or on a date')
     .action(
       async (
         file: string,

@@ -9,7 +9,7 @@ import { assertUpdateAllowed, setPageExpiry, updatePageHtml } from '../services/
 export function registerUpdate(program: Command): void {
   program
     .command('update')
-    .description('Replace the HTML behind an existing page URL (its local images are uploaded too)')
+    .description('Replace the HTML behind an existing page URL (its local images and videos are uploaded too)')
     .argument('<slug>', 'slug of the page to update')
     .argument('<file>', 'path to replacement .html file')
     .option('--expires <when>', 'set when the page expires: 30m, 12h, 7d, 2w, a date, or never')
@@ -31,7 +31,7 @@ export function registerUpdate(program: Command): void {
         const { html } = await attachLocalImages(file, slug, { update: true });
         const result = await updatePageHtml({ slug, file, user, html });
         const removed = await pruneUnusedImages(slug, html);
-        if (removed) console.error(`droppage: removed ${removed} image(s) the page no longer uses`);
+        if (removed) console.error(`droppage: removed ${removed} image or video file(s) the page no longer uses`);
         if (expiresAt !== undefined) {
           await setPageExpiry(slug, expiresAt);
           console.error(expiresAt ? `droppage: expires ${expiresAt.toISOString()}` : 'droppage: never expires');
@@ -50,7 +50,7 @@ export function registerUpdate(program: Command): void {
 
   program
     .command('expire')
-    .description('Set when a page (and its images) is deleted: 30m, 12h, 7d, 2w, a date, or never')
+    .description('Set when a page (and its images and videos) is deleted: 30m, 12h, 7d, 2w, a date, or never')
     .argument('<slug>', 'slug of the page')
     .argument('<when>', 'e.g. 7d, 2026-12-31, or never')
     .action(async (slug: string, when: string) => {

@@ -137,3 +137,30 @@ test('the new patterns keep the folder rules: no ../, absolute paths or symlinks
     + `<style>a{background:url(../secret.png)} b{background:url("assets/p.png")}</style>`;
   expect(findLocalImages(html, join(root, 'site', 'report.html'))).toEqual([]);
 });
+
+test('picks up videos: <video src>, <source src> inside <video>, and the <video poster> image', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'droppage-video-'));
+  for (const name of ['film.mp4', 'film.webm', 'still.webp', 'clip.mp4']) await writeFile(join(dir, name), 'x');
+  const html = `<video autoplay muted loop playsinline poster="still.webp">
+      <source src="film.webm" type="video/webm"><source src="film.mp4" type="video/mp4">
+    </video>
+    <video src='clip.mp4' poster="https://cdn.example.com/p.jpg"></video>
+    <video data-src="clip.mp4"></video><div poster="still.webp"></div><video src="film.mov"></video>`;
+
+  const found = findLocalImages(html, join(dir, 'page.html'));
+  expect(found.map((f) => f.ref)).toEqual(['still.webp', 'film.webm', 'film.mp4', 'clip.mp4']);
+
+  const out = rewriteImageRefs(html, new Map([
+    ['still.webp', 'https://droppage.dev/i/PPPPPPPPPPPP.webp'],
+    ['film.webm', 'https://droppage.dev/i/WWWWWWWWWWWW.webm'],
+    ['film.mp4', 'https://droppage.dev/i/MMMMMMMMMMMM.mp4'],
+    ['clip.mp4', 'https://droppage.dev/i/CCCCCCCCCCCC.mp4'],
+  ]));
+  expect(out).toContain('poster="https://droppage.dev/i/PPPPPPPPPPPP.webp"');
+  expect(out).toContain('<source src="https://droppage.dev/i/WWWWWWWWWWWW.webm" type="video/webm">');
+  expect(out).toContain('<source src="https://droppage.dev/i/MMMMMMMMMMMM.mp4" type="video/mp4">');
+  expect(out).toContain(`<video src='https://droppage.dev/i/CCCCCCCCCCCC.mp4' poster="https://cdn.example.com/p.jpg">`);
+  // Not real media attributes: untouched.
+  expect(out).toContain('<video data-src="clip.mp4">');
+  expect(out).toContain('<div poster="still.webp">');
+});

@@ -9,7 +9,7 @@ npm install -g droppage   # requires Node.js 22+
 droppage login
 ```
 
-Links are served from `https://droppage.dev/p/:slug`. Local images a page references in `<img src>` are uploaded with it (CLI 0.2.0+), served from `https://droppage.dev/i/:id`, and are public to anyone with the URL; they are deleted with their page. Pages can expire with `--expires` or `droppage expire`.
+Links are served from `https://droppage.dev/p/:slug`. Local images a page references in `<img src>` are uploaded with it (CLI 0.2.0+), and so are local MP4/WebM videos in `<video src>`, `<source src>` and `<video poster>` (CLI 0.3.0+, up to 20 MB each); they are served from `https://droppage.dev/i/:id`, and are public to anyone with the URL; they are deleted with their page. Pages can expire with `--expires` or `droppage expire`.
 
 Install options:
 

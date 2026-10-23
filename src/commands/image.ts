@@ -29,20 +29,22 @@ function fail(err: unknown): void {
 }
 
 /**
- * `droppage image upload|list|delete`: host images for HTML pages.
+ * `droppage image upload|list|delete` (alias `droppage media`): host images and
+ * videos for HTML pages.
  * Output contract: `upload` prints only the URL(s) on stdout, `--json` prints
  * only JSON; everything human goes to stderr.
  */
 export function registerImage(program: Command): void {
   const image = program
     .command('image')
-    .description('Images that belong to a page (uploaded automatically by upload/update from local files the HTML references)');
+    .alias('media')
+    .description('Images and videos that belong to a page (uploaded automatically by upload/update from local files the HTML references)');
 
   image
     .command('upload')
-    .description('Add images to one of your pages and print their URLs (PNG, JPEG, GIF, WebP, AVIF, SVG; up to 4 MB each)')
-    .argument('<files...>', 'image files')
-    .requiredOption('--page <slug>', 'the page the images belong to (they go when it is deleted or expires)')
+    .description('Add images or videos to one of your pages and print their URLs (PNG, JPEG, GIF, WebP, AVIF, SVG up to 4 MB each; MP4, WebM up to 20 MB each)')
+    .argument('<files...>', 'image or video files')
+    .requiredOption('--page <slug>', 'the page the files belong to (they go when it is deleted or expires)')
     .option('--json', 'print the results as JSON')
     .action(async (files: string[], options: { page: string; json?: boolean }) => {
       if (!(await signedIn())) return;
@@ -64,7 +66,7 @@ export function registerImage(program: Command): void {
 
   image
     .command('list')
-    .description("List your pages' images (one page with --page, including its image budget)")
+    .description("List your pages' images and videos (one page with --page, including its media budget)")
     .option('--page <slug>', 'only this page')
     .option('--json', 'print the list as JSON')
     .action(async (options: { page?: string; json?: boolean }) => {
@@ -76,7 +78,7 @@ export function registerImage(program: Command): void {
           return;
         }
         if (list.images.length === 0) {
-          console.error('droppage: no images. `droppage upload page.html` uploads the images the page uses.');
+          console.error('droppage: no images or videos. `droppage upload page.html` uploads the ones the page uses.');
         } else {
           process.stdout.write(renderTable(
             ['ID', 'PAGE', 'NAME', 'SIZE', 'UPLOADED', 'URL'],
@@ -86,7 +88,7 @@ export function registerImage(program: Command): void {
         }
         if (list.page) {
           const limit = list.page.limit_bytes === null ? 'unlimited' : formatBytes(list.page.limit_bytes);
-          console.error(`droppage: images on ${list.page.slug}: ${formatBytes(list.page.used_bytes)} of ${limit} per page.`);
+          console.error(`droppage: images and videos on ${list.page.slug}: ${formatBytes(list.page.used_bytes)} of ${limit} per page.`);
         }
       } catch (err) {
         fail(err);
@@ -95,8 +97,8 @@ export function registerImage(program: Command): void {
 
   image
     .command('delete')
-    .description('Delete images (by id or URL); they stop being served within 5 minutes; a browser that already loaded one may keep it up to a day')
-    .argument('<images...>', 'image ids or URLs')
+    .description('Delete images or videos (by id or URL); they stop being served within 5 minutes; a browser that already loaded one may keep it up to a day')
+    .argument('<images...>', 'image or video ids or URLs')
     .action(async (ids: string[]) => {
       if (!(await signedIn())) return;
       for (const value of ids) {

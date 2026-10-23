@@ -87,3 +87,69 @@ test('a prune the server refuses as not yet consistent (409) keeps the images an
   fetchMock.mockResolvedValue(Response.json({ error: 'could not prune images' }, { status: 500 }));
   await expect(pruneUnusedImages('Q3report01', Buffer.from('<p>x</p>'))).rejects.toMatchObject({ status: 500 });
 });
+
+const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypisom'), Buffer.alloc(40, 7)]);
+
+test('a video goes straight to Storage: reserve, PUT the bytes to the one-time URL, then the server verifies it', async () => {
+  const file = join(dir, 'film.mp4');
+  await writeFile(file, MP4);
+  fetchMock
+    .mockResolvedValueOnce(Response.json({
+      id: 'VidVidVidVid', upload_url: 'https://sb.test/storage/v1/object/upload/sign/images/u1/VidVidVidVid.mp4?token=t',
+      content_type: 'video/mp4', complete_url: '/api/images/VidVidVidVid/complete',
+    }, { status: 201 }))
+    .mockResolvedValueOnce(Response.json({ Key: 'images/u1/VidVidVidVid.mp4' }))
+    .mockResolvedValueOnce(Response.json(
+      { id: 'VidVidVidVid', url: 'https://serve.test/i/VidVidVidVid.mp4', bytes: MP4.length, content_type: 'video/mp4', existing: false },
+      { status: 201 },
+    ));
+  const { uploadImage } = await import('./images.js');
+
+  await expect(uploadImage(file, 'Q3report01', { update: true })).resolves.toMatchObject({ url: 'https://serve.test/i/VidVidVidVid.mp4' });
+
+  const [startUrl, start] = fetchMock.mock.calls[0];
+  expect(startUrl).toBe('https://serve.test/api/images/uploads');
+  expect(start.headers).toMatchObject({ Authorization: 'Bearer jwt-123' });
+  expect(JSON.parse(start.body)).toEqual({
+    page: 'Q3report01', bytes: MP4.length, filename: 'film.mp4', update: true,
+    sha256: (await import('node:crypto')).createHash('sha256').update(MP4).digest('hex'),
+    head: MP4.subarray(0, 64).toString('base64'),
+  });
+  const [putUrl, put] = fetchMock.mock.calls[1];
+  expect(putUrl).toContain('/object/upload/sign/images/u1/VidVidVidVid.mp4?token=t');
+  expect(put.method).toBe('PUT');
+  expect(put.headers).toEqual({ 'Content-Type': 'video/mp4', 'x-upsert': 'false' });
+  expect(Buffer.from(put.body)).toEqual(MP4);
+  // The Storage URL never gets the droppage session.
+  expect(put.headers.Authorization).toBeUndefined();
+  const [doneUrl, done] = fetchMock.mock.calls[2];
+  expect(doneUrl).toBe('https://serve.test/api/images/VidVidVidVid/complete');
+  expect(done.method).toBe('POST');
+});
+
+test('a video already on the page is not sent again', async () => {
+  const file = join(dir, 'film.webm');
+  await writeFile(file, MP4);
+  fetchMock.mockResolvedValueOnce(Response.json(
+    { id: 'VidVidVidVid', url: 'https://serve.test/i/VidVidVidVid.webm', bytes: MP4.length, content_type: 'video/webm', existing: true },
+  ));
+  const { uploadImage } = await import('./images.js');
+  await expect(uploadImage(file, 'Q3report01')).resolves.toMatchObject({ existing: true });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test('videos over 20 MB are refused before the network; a failed Storage PUT is a clear error', async () => {
+  const big = join(dir, 'big.mp4');
+  await writeFile(big, Buffer.alloc(20_000_001));
+  const { uploadImage } = await import('./images.js');
+  await expect(uploadImage(big, 'Q3report01')).rejects.toThrow(/larger than 20 MB/);
+  expect(fetchMock).not.toHaveBeenCalled();
+
+  const file = join(dir, 'film.mp4');
+  await writeFile(file, MP4);
+  fetchMock
+    .mockResolvedValueOnce(Response.json({ id: 'VidVidVidVid', upload_url: 'https://sb.test/x', content_type: 'video/mp4', complete_url: '/api/images/VidVidVidVid/complete' }, { status: 201 }))
+    .mockResolvedValueOnce(new Response('{"error":"Payload too large"}', { status: 413 }));
+  await expect(uploadImage(file, 'Q3report01')).rejects.toMatchObject({ status: 413, message: expect.stringContaining('storage answered HTTP 413') });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});

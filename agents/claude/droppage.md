@@ -75,6 +75,7 @@ droppage upload report.html
 
 - `droppage update <slug> report.html` uploads any new local images, keeps the same URL for an unchanged image, and deletes the page's images the new HTML no longer uses.
 - From CLI 0.2.2, `upload` and `update` also pick up local images in `srcset` (every candidate, descriptors kept, e.g. `<picture><source srcset="hero-m.webp 1x, hero-l.webp 2x">`), icon links (`<link rel="icon" href="favicon.png">`, `apple-touch-icon`), and `url(...)` inside `<style>` blocks. Same folder rule. Not picked up: `style="..."` attributes and `.ico` files.
+- Videos (CLI 0.3.0+): short MP4 or WebM films are hosted like images. Reference local files in `<video src="film.mp4">`, in `<source src="film.webm">` inside `<video>`, and the poster image in `<video poster="still.webp">`; `upload` and `update` upload them to the page and rewrite the links (stderr: `droppage: video film.mp4 → https://droppage.dev/i/<id>.mp4`). Each video up to 20 MB, checked by its file signature (MP4 with H.264 and WebM with VP9 play in every browser; `.mov` and `.mkv` are refused). Videos share the page's image budget, are served with HTTP Range support (so Safari, iOS and seeking work), and are public and deleted with their page, exactly like images. For a muted autoplay loop: `<video autoplay muted loop playsinline poster="still.webp"><source src="film.webm" type="video/webm"><source src="film.mp4" type="video/mp4"></video>`. Do not inline videos as base64. `droppage image upload film.mp4 --page <slug>` (alias `droppage media upload`) adds a video to an existing page.
 - Deleting a page, or the page expiring, removes its images too. Images never outlive their page.
 - Image budget per page by plan: Free 5 MB, Starter 20 MB, Builder 50 MB. Each image up to 4 MB. PNG, JPEG, GIF, WebP, AVIF, SVG. Image traffic counts toward the account's monthly bandwidth.
 - Prefer small formats: WebP or AVIF for photos and screenshots, SVG for charts and logos (often several times smaller than PNG or JPEG). When you generate images, produce WebP, AVIF, or SVG. The CLI prints a tip on stderr when a PNG, JPEG, or GIF is over 300 KB.
@@ -84,7 +85,7 @@ droppage upload report.html
 Advanced, for images that are not in the HTML at upload time:
 
 ```bash
-droppage image upload chart.png logo.svg --page <slug>   # add images to an existing page; prints their URLs
+droppage image upload chart.png logo.svg film.mp4 --page <slug>   # add images or videos to an existing page; prints their URLs
 droppage image list --page <slug> --json
 droppage image delete <id-or-url...>
 ```

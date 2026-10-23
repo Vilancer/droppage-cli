@@ -45,10 +45,11 @@ Authenticate once with `droppage login` (magic link sent to the user's email).
    ```
    PNG, JPEG, GIF, WebP, AVIF, SVG, up to 4 MB each. Budget per page: Free 5 MB, Starter 20 MB, Builder 50 MB. Image traffic counts toward monthly bandwidth. `update` uploads new images, keeps the same URL for an unchanged image, and deletes the ones the new HTML no longer uses. Deleting a page, or the page expiring, removes its images too.
    From CLI 0.2.2 the CLI also picks up local images in `srcset` (every candidate, descriptors kept), `<link rel="icon"|"apple-touch-icon" href>`, and `url(...)` inside `<style>` blocks (not `style="..."` attributes or `.ico` files).
+   Videos (CLI 0.3.0+): short MP4 or WebM films are hosted like images. Reference local files in `<video src="film.mp4">`, in `<source src="film.webm">` inside `<video>`, and the poster image in `<video poster="still.webp">`; `upload` and `update` upload them to the page and rewrite the links (stderr: `droppage: video film.mp4 → https://droppage.dev/i/<id>.mp4`). Each video up to 20 MB, checked by its file signature (MP4 with H.264 and WebM with VP9 play in every browser; `.mov` and `.mkv` are refused). Videos share the page's image budget, are served with HTTP Range support (so Safari, iOS and seeking work), and are public and deleted with their page, exactly like images. For a muted autoplay loop: `<video autoplay muted loop playsinline poster="still.webp"><source src="film.webm" type="video/webm"><source src="film.mp4" type="video/mp4"></video>`. Do not inline videos as base64. `droppage image upload film.mp4 --page <slug>` (alias `droppage media upload`) adds a video to an existing page.
    Prefer small formats: WebP or AVIF for photos and screenshots, SVG for charts and logos. When you generate images, produce WebP, AVIF, or SVG. The CLI prints a tip on stderr when a PNG, JPEG, or GIF is over 300 KB.
 9. Advanced: add images to an existing page, or inspect and remove them:
    ```bash
-   droppage image upload chart.png --page <slug>   # prints their URLs; --json prints [{file,id,url,bytes,content_type,existing}]
+   droppage image upload chart.png film.mp4 --page <slug>   # images or videos; prints their URLs; --json prints [{file,id,url,bytes,content_type,existing}]
    droppage image list --page <slug> --json        # {images:[{id,url,ext,content_type,bytes,name,created_at,page}], page?:{slug,used_bytes,limit_bytes}}
    droppage image delete <id-or-url>
    ```

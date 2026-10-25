@@ -12,7 +12,7 @@ export type SubmitFeedbackInput = {
   contact?: string;
   rating?: number;
   testimonial_consent?: boolean;
-  source: 'cli';
+  source: 'cli' | 'mcp';
   cli_version: string;
 };
 

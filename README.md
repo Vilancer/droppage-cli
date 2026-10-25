@@ -53,6 +53,7 @@ Open the printed link in any browser. That's it.
 | `droppage quota` | Show the current plan, page usage, monthly meter, reset date, and enabled features. `--json` returns the account API body. |
 | `droppage feedback <message>` | Send feedback without requiring login. Options: `--kind idea|bug|review|other`, `--agent [model]`, `--contact <email>`, review-only `--rating <1-5>` and `--allow-quote`. Quote permission never publishes automatically. |
 | `droppage upgrade` | Install the latest CLI globally with npm and report the installed version. |
+| `droppage mcp` | Run a local MCP server on stdio for AI agents (see [Use droppage over MCP](#use-droppage-over-mcp)). |
 
 Run `droppage <command> --help` for full option details.
 
@@ -66,7 +67,7 @@ it, with any options before the `--`: `droppage expire -- -AbC12xYz9 never` or
 |---|---|---|
 | *(none)* | public | Anyone with the link. |
 | `--password` | password | Visitors who enter the password (prompted securely at upload time). |
-| `--email a@x.com,b@y.com` | email | Allowlisted addresses, verified by a magic link. Manage later with `recipients`. |
+| `--email a@x.com,b@y.com` | email | Allowlisted addresses, verified by a magic link. Publishing emails nobody: each person enters their email at the link. `recipients add` emails an invitation. |
 | `--private` | private | Only you (your account email). Useful for drafts. |
 
 `--password`, `--email`, and `--private` are mutually exclusive. `update` never changes the access
@@ -172,6 +173,10 @@ its images stop working. A daily cleanup then deletes the page and its images fo
 droppage is a quick way to send an analysis to people who don't have your tools: a dashboard for your
 team, a weekly KPI or stakeholder report, a client deliverable, a notebook export. They open a link.
 
+- **Design it well.** Agents should load Anthropic's `frontend-design` skill before building the page, so
+  the report gets a deliberate look instead of a templated one. Claude Code:
+  `/plugin install frontend-design@claude-plugins-official`; Codex, Cursor, and other agents: use its
+  `SKILL.md` from [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/frontend-design).
 - **Export one HTML file**, up to 5 MB, with the data inside it: `jupyter nbconvert --to html
   analysis.ipynb`, Plotly's `fig.write_html("report.html", include_plotlyjs="cdn")`, Altair's
   `chart.save("report.html")`, or your own Chart.js / ECharts page. Scripts run, so interactive
@@ -199,6 +204,44 @@ droppage keeps a strict stream contract so it is safe to call from automation:
 
 Ready-made instruction packs for Codex, Cursor, and Claude-style agents live in the
 [`agents/`](https://github.com/Vilancer/droppage-cli/tree/main/agents) directory of the repository.
+Machine-readable docs for agents and doc tools such as mcpdoc:
+[droppage.dev/llms.txt](https://droppage.dev/llms.txt), or everything in one file at
+[droppage.dev/llms-full.txt](https://droppage.dev/llms-full.txt).
+
+## Use droppage over MCP
+
+From 0.4.0, `droppage mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio, so
+agents in Claude Code, Cursor, Codex, Windsurf, or Claude Desktop publish through typed tools instead of shell
+commands. It runs on your machine and uses the session from `droppage login`; sign in once in a terminal first.
+
+```bash
+claude mcp add droppage -- npx -y droppage mcp          # Claude Code
+```
+
+Cursor (`.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), and Claude Desktop
+(`claude_desktop_config.json`):
+
+```json
+{ "mcpServers": { "droppage": { "command": "npx", "args": ["-y", "droppage", "mcp"] } } }
+```
+
+Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.droppage]
+command = "npx"
+args = ["-y", "droppage", "mcp"]
+```
+
+Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list.
+
+- Signed out, every tool answers "Not signed in. Ask the user to run `droppage login` in a terminal, then retry."
+  There is no login tool: login needs the terminal, and stdin belongs to the protocol.
+- There is no password mode over MCP, so a password never lands in an agent transcript. Run
+  `droppage upload <file> --password` yourself for a password page.
+- Pass a file `path` when the page uses local images or videos; inline `html` cannot bring them.
+- `update_page`, `delete_page`, `set_page_expiry`, `remove_recipient`, and `delete_media` are marked destructive, so MCP clients ask before running them.
+- Any client you configure with this server can publish, change, and delete pages as you. Add it only to agents you trust with your droppage account.
 
 ## Updating
 

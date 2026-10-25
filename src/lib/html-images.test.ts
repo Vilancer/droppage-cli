@@ -164,3 +164,11 @@ test('picks up videos: <video src>, <source src> inside <video>, and the <video 
   expect(out).toContain('<video data-src="clip.mp4">');
   expect(out).toContain('<div poster="still.webp">');
 });
+
+test('referencesLocalMedia: relative media files only, whether or not they exist', async () => {
+  const { referencesLocalMedia } = await import('./html-images.js');
+  expect(referencesLocalMedia('<img src="chart.png">')).toBe(true);
+  expect(referencesLocalMedia('<video poster="still.webp" src="https://x.test/a.mp4"></video>')).toBe(true);
+  expect(referencesLocalMedia('<img src="https://droppage.dev/i/AbCdEfGhIjKl.png"><img src="/logo.svg">')).toBe(false);
+  expect(referencesLocalMedia('<img src="data:image/png;base64,AAAA"><a href="notes.png">x</a>')).toBe(false);
+});

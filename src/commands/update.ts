@@ -1,10 +1,8 @@
-import { readFile } from 'node:fs/promises';
 import type { Command } from 'commander';
-import { validateHtmlUpload } from '../lib/validate-html.js';
 import { parseExpiry } from '../lib/duration.js';
 import { AuthRequiredError, requireAuth } from '../services/auth.js';
-import { attachLocalImages, pruneUnusedImages } from '../services/page-images.js';
-import { assertUpdateAllowed, setPageExpiry, updatePageHtml } from '../services/pages.js';
+import { setPageExpiry } from '../services/pages.js';
+import { updatePage } from '../services/publish.js';
 
 export function registerUpdate(program: Command): void {
   program
@@ -25,17 +23,7 @@ export function registerUpdate(program: Command): void {
       try {
         const expiresAt = options.expires === undefined ? undefined : parseExpiry(options.expires);
         console.error(`droppage: updating ${slug} from ${file}...`);
-        await assertUpdateAllowed(slug);
-        // Reject a bad file before any image is uploaded for it.
-        validateHtmlUpload(file, await readFile(file));
-        const { html } = await attachLocalImages(file, slug, { update: true });
-        const result = await updatePageHtml({ slug, file, user, html });
-        const removed = await pruneUnusedImages(slug, html);
-        if (removed) console.error(`droppage: removed ${removed} image or video file(s) the page no longer uses`);
-        if (expiresAt !== undefined) {
-          await setPageExpiry(slug, expiresAt);
-          console.error(expiresAt ? `droppage: expires ${expiresAt.toISOString()}` : 'droppage: never expires');
-        }
+        const result = await updatePage({ slug, file, user, expiresAt });
         console.error(`droppage: updated ${slug}`);
         process.stdout.write(result.url + '\n');
       } catch (err) {

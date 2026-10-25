@@ -1,45 +1,13 @@
 import type { Command } from 'commander';
-import { buildShareUrl, resolveShareBaseUrl } from '../lib/share-url.js';
 import {
   PAGE_TABLE_ALIGN,
   PAGE_TABLE_HEADERS,
   pageTableCells,
   renderTable,
 } from '../lib/table.js';
-import { createSupabaseClient } from '../lib/supabase.js';
 import { AuthRequiredError, requireAuth } from '../services/auth.js';
-import { listPages, type PageRow } from '../services/pages.js';
-
-type PreviewMap = Map<string, string>;
-
-async function fetchPreviewUrls(pages: PageRow[]): Promise<PreviewMap | null> {
-  if (pages.length === 0) return new Map();
-  const supabase = createSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) return null;
-
-  const response = await fetch(`${resolveShareBaseUrl()}/api/preview`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ slugs: pages.map((page) => page.slug) }),
-  });
-  if (!response.ok) return null;
-  const body = (await response.json()) as {
-    previews?: { slug?: unknown; url?: unknown }[];
-  };
-  return new Map(
-    (body.previews ?? [])
-      .filter(
-        (preview): preview is { slug: string; url: string } =>
-          typeof preview.slug === 'string' && typeof preview.url === 'string',
-      )
-      .map((preview) => [preview.slug, preview.url]),
-  );
-}
+import { fetchPreviewUrls, pageJson, type PreviewMap } from '../services/page-list.js';
+import { listPages } from '../services/pages.js';
 
 export function registerList(program: Command): void {
   program
@@ -81,18 +49,7 @@ export function registerList(program: Command): void {
         if (options.json) {
           process.stdout.write(
             JSON.stringify(
-              pages.map((page) => ({
-                slug: page.slug,
-                url: buildShareUrl(page.slug),
-                access_mode: page.access_mode,
-                allowed_emails: page.allowed_emails ?? [],
-                view_count: page.view_count,
-                created_at: page.created_at,
-                last_viewed_at: page.last_viewed_at,
-                ...(options.preview
-                  ? { preview_url: previews?.get(page.slug) ?? null }
-                  : {}),
-              })),
+              pages.map((page) => pageJson(page, options.preview ? previews : undefined)),
               null,
               2,
             ) + '\n',

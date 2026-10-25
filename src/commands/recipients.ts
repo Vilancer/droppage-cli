@@ -1,6 +1,6 @@
 import { confirm as confirmPrompt } from '@inquirer/prompts';
 import type { Command } from 'commander';
-import { z } from 'zod';
+import { cleanEmails } from '../lib/emails.js';
 import { renderTable } from '../lib/table.js';
 import { AuthRequiredError, requireAuth } from '../services/auth.js';
 import {
@@ -12,8 +12,6 @@ import {
   type RecipientRow,
 } from '../services/recipients.js';
 
-const emailSchema = z.email();
-
 const RECIPIENT_HEADERS = ['EMAIL', 'STATUS', 'INVITATION', 'LAST SENT'] as const;
 const RECIPIENT_ALIGN = ['left', 'left', 'left', 'left'] as const;
 
@@ -23,19 +21,6 @@ function formatDateCell(iso: string | null): string {
 
 function recipientCells(row: RecipientRow): string[] {
   return [row.email, row.status, row.invitation_status, formatDateCell(row.last_sent_at)];
-}
-
-/**
- * Normalize + validate a list of addresses BEFORE any network call, mirroring the
- * upload command's contract (D-07): one bad address rejects the whole batch by
- * name, so no recipient is silently dropped and then left without access.
- */
-function cleanEmails(values: string[]): string[] {
-  const cleaned = [...new Set(values.map((e) => e.trim().toLowerCase()).filter(Boolean))];
-  if (!cleaned.length) throw new Error('no email addresses given');
-  const invalid = cleaned.filter((e) => !emailSchema.safeParse(e).success);
-  if (invalid.length) throw new Error(`invalid email address(es): ${invalid.join(', ')}`);
-  return cleaned;
 }
 
 /** Shared auth + error envelope. Status goes to stderr; stdout stays parseable. */

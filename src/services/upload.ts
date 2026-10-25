@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { User } from '@supabase/supabase-js';
 import { buildShareUrl } from '../lib/share-url.js';
+import { notify } from '../lib/notify.js';
 import { createSlug } from '../lib/slug.js';
 import { asError } from '../lib/supabase-error.js';
 import { createSupabaseClient } from '../lib/supabase.js';
@@ -75,7 +76,7 @@ export async function upload({
   const { warnings } = validateHtmlUpload(file, bytes);
   // With local images, warn about the HTML as published (links rewritten), not
   // about references that are about to be uploaded.
-  if (!prepare) for (const w of warnings) console.error(`droppage: warning: ${w}`);
+  if (!prepare) for (const w of warnings) notify('warning', w);
 
   const supabase = createSupabaseClient();
 
@@ -109,7 +110,7 @@ export async function upload({
     const storagePath = `${user.id}/${slug}.html`;
     if (prepare) {
       bytes = await prepare(slug);
-      if (attempt === 0) for (const w of validateHtmlUpload(file, bytes).warnings) console.error(`droppage: warning: ${w}`);
+      if (attempt === 0) for (const w of validateHtmlUpload(file, bytes).warnings) notify('warning', w);
     }
 
     const up = await supabase.storage.from(BUCKET).upload(storagePath, bytes, {
@@ -159,9 +160,7 @@ export async function upload({
     // and surface removal failures instead of silently leaking.
     const rm = await supabase.storage.from(BUCKET).remove([storagePath]);
     if (rm.error) {
-      console.error(
-        `droppage: warning: could not remove orphan ${storagePath}: ${rm.error.message}`,
-      );
+      notify('warning', `could not remove orphan ${storagePath}: ${rm.error.message}`);
     }
     // Slug UNIQUE violation → retry with a fresh slug; any other error is fatal.
     if (ins.error.code === '23505') continue;

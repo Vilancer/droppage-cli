@@ -21,6 +21,9 @@ const STYLE_RE = /(<style\b[^>]*>)([\s\S]*?)<\/style\s*>/gi;
 // CSS url(): quoted ("…" / '…') or bare. Groups: 1 = "…" value, 2 = '…' value, 3 = bare value.
 const CSS_URL_RE = /\burl\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"'()]+))\s*\)/gi;
 
+/** True for an image or video file type a page can carry. */
+export const isMediaFile = (path: string) => MEDIA_EXTS.has(extname(path).toLowerCase());
+
 /** True for a file the CLI uploads as a video (.mp4, .webm). */
 export const isVideoFile = (path: string) => VIDEO_EXTS.has(extname(path).toLowerCase());
 
@@ -161,6 +164,17 @@ export function findLocalImages(html: string, htmlFile: string): LocalImage[] {
     seen.set(ref, { ref, path: real });
   }
   return [...seen.values()];
+}
+
+/**
+ * True when the HTML names a relative image or video file (not a URL, not
+ * root-relative), whether or not it exists: for inline HTML that has no folder
+ * to upload such files from.
+ */
+export function referencesLocalMedia(html: string): boolean {
+  return imageSlots(html).some(
+    ({ ref }) => !/^(?:[a-z][a-z0-9+.-]*:|\/|\\|#)/i.test(ref) && isMediaFile(ref.split(/[?#]/)[0]),
+  );
 }
 
 /** Point every image reference that used a local file at its hosted URL; nothing else changes. */

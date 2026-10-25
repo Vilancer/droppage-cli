@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import { isVideoFile } from '../lib/html-images.js';
+import { notify } from '../lib/notify.js';
 
 import { resolveShareBaseUrl } from '../lib/share-url.js';
 import { createSupabaseClient } from '../lib/supabase.js';
@@ -113,7 +114,7 @@ export async function uploadImage(file: string, slug: string, { update = false }
     body: bytes,
   });
   if (info.size > HEAVY_IMAGE_BYTES && /\.(png|jpe?g|gif)$/i.test(file)) {
-    console.error(`droppage: tip: ${basename(file)} is ${Math.round(info.size / 1024)} KB; WebP or AVIF is usually several times smaller (SVG for charts).`);
+    notify('tip', `${basename(file)} is ${Math.round(info.size / 1024)} KB; WebP or AVIF is usually several times smaller (SVG for charts).`);
   }
   return asUploaded(body);
 }

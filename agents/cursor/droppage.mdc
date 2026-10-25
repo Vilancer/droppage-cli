@@ -23,8 +23,9 @@ droppage delete <slug> --yes
 
 Reports and dashboards:
 
+- Design it well: before you build or restyle the page, load Anthropic's `frontend-design` skill so the report gets a deliberate look instead of a templated one. If it isn't installed, suggest it to the user. Claude Code: `/plugin install frontend-design@claude-plugins-official`. Codex, Cursor, and other agents: use its `SKILL.md` from <https://github.com/anthropics/skills/tree/main/skills/frontend-design>.
 - One self-contained `.html` file, 5 MB max, with the data and CSS inside it. Scripts run and chart libraries can load from a CDN (Chart.js, Plotly, ECharts, Vega-Lite); Plotly `write_html(..., include_plotlyjs="cdn")`, Altair `chart.save()`, and `jupyter nbconvert --to html` output can be published as is. Pages are sandboxed: no `localStorage`, cookies, or same-origin requests.
-- Business data is rarely public. Named stakeholders: `--email a@example.com,b@example.com` (Builder), managed later with `droppage recipients add|remove <slug> ...`. Group link: `--password` (Starter and Builder). Draft: `--private`. Public only when the user says so; On the Free plan, pages can be public or private, without a password or email list (`droppage quota --json` shows the plan).
+- Business data is rarely public. Named stakeholders: `--email a@example.com,b@example.com` (Builder); publishing emails nobody (each person enters their email at the link to get an access link); `droppage recipients add <slug> ...` emails new people an invitation, `recipients remove` takes access away. Group link: `--password` (Starter and Builder). Draft: `--private`. Public only when the user says so; On the Free plan, pages can be public or private, without a password or email list (`droppage quota --json` shows the plan).
 - Recurring report: `droppage update <slug> report.html` keeps the same link and access settings. One-off deliverable: `--expires 30d`. `list --json` rows have `view_count` (unique visitors) and `last_viewed_at`.
 
 Images (CLI 0.2.0+) belong to a page. Reference local image files in the HTML (`<img src="chart.png">`, paths relative to the HTML file, inside its folder; no ../ or absolute paths) and `droppage upload` uploads them to that page, rewrites the links to `https://droppage.dev/i/<id>.<ext>`, then publishes. stderr shows `droppage: image chart.png → https://droppage.dev/i/…` per image; stdout is still only the page URL. `update` uploads new images, keeps the same URL for an unchanged image, and deletes the ones the new HTML no longer uses. From CLI 0.2.2 the CLI also picks up local images in `srcset` (every candidate, descriptors kept), `<link rel="icon"|"apple-touch-icon" href>`, and `url(...)` inside `<style>` blocks (not `style="..."` attributes or `.ico` files).
@@ -51,10 +52,26 @@ Rules:
 - Videos (CLI 0.3.0+): short MP4 or WebM films are hosted like images. Reference local files in `<video src="film.mp4">`, in `<source src="film.webm">` inside `<video>`, and the poster image in `<video poster="still.webp">`; `upload` and `update` upload them to the page and rewrite the links (stderr: `droppage: video film.mp4 → https://droppage.dev/i/<id>.mp4`). Each video up to 20 MB, checked by its file signature (MP4 with H.264 and WebM with VP9 play in every browser; `.mov` and `.mkv` are refused). Videos share the page's image budget, are served with HTTP Range support (so Safari, iOS and seeking work), and are public and deleted with their page, exactly like images. For a muted autoplay loop: `<video autoplay muted loop playsinline poster="still.webp"><source src="film.webm" type="video/webm"><source src="film.mp4" type="video/mp4"></video>`. Do not inline videos as base64. `droppage image upload film.mp4 --page <slug>` (alias `droppage media upload`) adds a video to an existing page.
 - Prefer small formats: WebP or AVIF for photos and screenshots, SVG for charts and logos. When you generate images, produce WebP, AVIF, or SVG. The CLI prints a tip on stderr when a PNG, JPEG, or GIF is over 300 KB.
 
+## Use droppage over MCP (CLI 0.4.0+)
+
+If the client supports MCP (Claude Code, Cursor, Codex, Windsurf, Claude Desktop), droppage can also run as a local MCP server on stdio, so you publish through typed tools instead of shell commands. It uses the session from `droppage login`.
+
+- Claude Code: `claude mcp add droppage -- npx -y droppage mcp`
+- Cursor (`.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), Claude Desktop (`claude_desktop_config.json`): `{"mcpServers": {"droppage": {"command": "npx", "args": ["-y", "droppage", "mcp"]}}}`
+- Codex (`~/.codex/config.toml`): a `[mcp_servers.droppage]` table with `command = "npx"` and `args = ["-y", "droppage", "mcp"]`
+
+Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list; the page URL is in `url`.
+
+- Sign-in stays in a terminal. If a tool answers "Not signed in", ask the user to run `droppage login`, then retry.
+- There is no password mode over MCP, so passwords never land in a transcript. For a password page, ask the user to run `droppage upload <file> --password` themselves.
+- Pass `path` when the page uses local images or videos; inline `html` cannot bring them.
+- `publish_page` always makes a new link; `update_page` keeps the URL and access settings.
+
 ## Source & docs
 
 - Source and README documentation: <https://github.com/Vilancer/droppage-cli>
 - npm package: <https://www.npmjs.com/package/droppage>
+- Machine-readable docs: <https://droppage.dev/llms.txt> (everything in one file: <https://droppage.dev/llms-full.txt>)
 
 ## Stay current
 
@@ -87,7 +104,7 @@ droppage feedback "Describe the idea or bug" --kind idea --agent "<model name>"
 droppage feedback "Describe the experience" --kind review --rating 5 --agent "<model name>"
 ```
 
-Humans can use the homepage form or omit `--agent` in the CLI. If the CLI is unavailable, POST JSON directly:
+Humans can use the form at <https://droppage.dev/feedback> or omit `--agent` in the CLI. If the CLI is unavailable, POST JSON directly:
 
 ```http
 POST https://droppage.dev/api/feedback

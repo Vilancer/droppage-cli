@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { User } from '@supabase/supabase-js';
 import { buildShareUrl } from '../lib/share-url.js';
+import { notify } from '../lib/notify.js';
 import { asError } from '../lib/supabase-error.js';
 import { createSupabaseClient } from '../lib/supabase.js';
 import { validateHtmlUpload } from '../lib/validate-html.js';
@@ -88,9 +89,7 @@ export async function deletePage(
   }
 
   if (blobWasAbsent) {
-    console.error(
-      `droppage: warning: no stored HTML was found at ${storagePath}; deleted metadata row for ${slug}.`,
-    );
+    notify('warning', `no stored HTML was found at ${storagePath}; deleted metadata row for ${slug}.`);
   }
   return { ok: true, blobWasAbsent };
 }
@@ -109,9 +108,7 @@ export async function updatePageHtml({
 }): Promise<UpdatePageResult> {
   const bytes = html ?? (await readFile(file));
   const { warnings } = validateHtmlUpload(file, bytes);
-  for (const warning of warnings) {
-    console.error(`droppage: warning: ${warning}`);
-  }
+  for (const warning of warnings) notify('warning', warning);
 
   const supabase = createSupabaseClient();
   const preflight = await supabase.rpc('assert_page_update_allowed', {

@@ -2,9 +2,16 @@ import { password as passwordPrompt } from '@inquirer/prompts';
 import type { Command } from 'commander';
 import { hashPassword } from '../lib/password.js';
 import { parseExpiry } from '../lib/duration.js';
-import { attachLocalImages, hasLocalImages } from '../services/page-images.js';
-import { AuthRequiredError, emailSchema, requireAuth } from '../services/auth.js';
-import { type AccessMode, upload } from '../services/upload.js';
+import { AuthRequiredError, requireAuth } from '../services/auth.js';
+import { publishPage, resolveAccess } from '../services/publish.js';
+import type { AccessMode } from '../services/upload.js';
+
+/** The one access mode the flags ask for; the command rejects more than one first (D-06). */
+function accessModeOf(options: { password?: boolean; email?: string[]; private?: boolean }): AccessMode {
+  if (options.password) return 'password';
+  if (options.email?.length) return 'email';
+  return options.private ? 'private' : 'public';
+}
 
 export function registerUpload(program: Command): void {
   program
@@ -60,9 +67,6 @@ export function registerUpload(program: Command): void {
 
         try {
           let passwordHash: string | undefined;
-          let allowedEmails: string[] | undefined;
-          let accessMode: AccessMode = 'public';
-
           if (options.password) {
             // D-04: capture the password interactively (masked) AFTER auth. Both
             // the prompt and the mismatch error live on stderr (D-10); the
@@ -75,68 +79,21 @@ export function registerUpload(program: Command): void {
             });
             if (pw !== confirm) throw new Error('Passwords do not match');
             passwordHash = await hashPassword(pw);
-            accessMode = 'password';
-          } else if (options.email?.length) {
-            // ACC-02 / D-05: normalize (trim + lowercase), drop empties, and dedupe
-            // so the serve-side membership check is a direct comparison (Pitfall 4).
-            const cleaned = [
-              ...new Set(
-                options.email
-                  .map((e) => e.trim().toLowerCase())
-                  .filter(Boolean),
-              ),
-            ];
-            // D-07: after dropping empties there must be at least one recipient —
-            // an all-empty --email must NOT silently become a public upload.
-            if (!cleaned.length) {
-              throw new Error(
-                '--email was given but contained no email addresses',
-              );
-            }
-            // D-07: validate EVERY address with z.email() BEFORE any network call.
-            // Any failure rejects the whole upload naming the bad value(s) — no
-            // recipient is silently dropped and then locked out.
-            const invalid = cleaned.filter(
-              (e) => !emailSchema.safeParse(e).success,
-            );
-            if (invalid.length) {
-              throw new Error(
-                `invalid email address(es): ${invalid.join(', ')}`,
-              );
-            }
-            allowedEmails = cleaned;
-            accessMode = 'email';
-          } else if (options.private) {
-            // D-04: private = a one-address allowlist containing the owner's own
-            // email, resolved from the authenticated user. The owner unlocks
-            // through the identical magic-link path.
-            const ownerEmail = user.email?.trim().toLowerCase();
-            if (!ownerEmail) {
-              throw new Error(
-                '--private requires an email on your account, but none was found',
-              );
-            }
-            allowedEmails = [ownerEmail];
-            accessMode = 'private';
           }
+          // Validates every --email address (D-07) and resolves --private to the
+          // owner's own email (D-04), all before any network call.
+          const access = resolveAccess(
+            user,
+            accessModeOf(options),
+            { emails: options.email, passwordHash },
+          );
 
           // D-10: all status/progress goes to stderr; stdout stays URL-only.
           const expiresAt = options.expires ? parseExpiry(options.expires) ?? undefined : undefined;
           console.error(`droppage: uploading ${file}...`);
           // Local <img src="chart.png"> files are uploaded to the page and the
           // links rewritten, once the page's slug is chosen.
-          const prepare = (await hasLocalImages(file))
-            ? async (slug: string) => (await attachLocalImages(file, slug)).html
-            : undefined;
-          const url = await upload({
-            file,
-            user,
-            passwordHash,
-            allowedEmails,
-            accessMode,
-            prepare,
-            expiresAt,
-          });
+          const { url } = await publishPage({ file, user, access, expiresAt });
           if (expiresAt) console.error(`droppage: expires ${expiresAt.toISOString()}`);
           console.error('droppage: done');
           // stdout carries ONLY the bare URL — pipe-friendly for agents/CI.

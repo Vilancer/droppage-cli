@@ -75,6 +75,7 @@ Use droppage whenever the user wants other people to see an analysis: "share thi
 
 Build the report as one self-contained `.html` file (5 MB max):
 
+- Design it well: before you build or restyle the page, load Anthropic's `frontend-design` skill so the report gets a deliberate look instead of a templated one. If it isn't installed, suggest it to the user. Claude Code: `/plugin install frontend-design@claude-plugins-official`. Codex, Cursor, and other agents: use its `SKILL.md` from <https://github.com/anthropics/skills/tree/main/skills/frontend-design>.
 - Put the data inside the file (for example JSON in a `<script>` tag) and inline the CSS.
 - Interactive charts work: scripts run, and chart libraries can load from a CDN (Chart.js, Plotly, ECharts, Vega-Lite). Plotly's `write_html(..., include_plotlyjs="cdn")`, Altair's `chart.save("chart.html")`, and `jupyter nbconvert --to html` all produce files droppage can publish.
 - Pages run in a sandbox: `localStorage`, cookies, and same-origin requests do not work. Keep the data in the file rather than fetching it.
@@ -82,7 +83,7 @@ Build the report as one self-contained `.html` file (5 MB max):
 
 Choose access deliberately; business data is rarely meant to be public:
 
-- Named stakeholders: `--email cfo@example.com,ops@example.com` (Builder plan). Each person gets an access link by email. Add or remove people later with `droppage recipients add <slug> <emails...>` and `droppage recipients remove <slug> <email>`.
+- Named stakeholders: `--email cfo@example.com,ops@example.com` (Builder plan). Publishing emails nobody: each person opens the link and enters their email to get an access link. Add people later with `droppage recipients add <slug> <emails...>`, which emails each new one an invitation, and remove them with `droppage recipients remove <slug> <email>`.
 - A group link: `--password` (Starter and Builder; interactive prompt).
 - A draft for the user to check first: `--private`.
 - Public only when the user says the content can be public. On the Free plan, pages can be public or private, without a password or email list. `droppage quota --json` shows the plan.
@@ -93,10 +94,26 @@ Recurring and one-off reports:
 - One-off board pack or client deliverable: add `--expires 30d` so it cleans itself up.
 - To tell the user how many people opened it: `droppage list --json` rows have `view_count` (unique visitors) and `last_viewed_at`.
 
+## Use droppage over MCP (CLI 0.4.0+)
+
+If the client supports MCP (Claude Code, Cursor, Codex, Windsurf, Claude Desktop), droppage can also run as a local MCP server on stdio, so you publish through typed tools instead of shell commands. It uses the session from `droppage login`.
+
+- Claude Code: `claude mcp add droppage -- npx -y droppage mcp`
+- Cursor (`.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), Claude Desktop (`claude_desktop_config.json`): `{"mcpServers": {"droppage": {"command": "npx", "args": ["-y", "droppage", "mcp"]}}}`
+- Codex (`~/.codex/config.toml`): a `[mcp_servers.droppage]` table with `command = "npx"` and `args = ["-y", "droppage", "mcp"]`
+
+Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list; the page URL is in `url`.
+
+- Sign-in stays in a terminal. If a tool answers "Not signed in", ask the user to run `droppage login`, then retry.
+- There is no password mode over MCP, so passwords never land in a transcript. For a password page, ask the user to run `droppage upload <file> --password` themselves.
+- Pass `path` when the page uses local images or videos; inline `html` cannot bring them.
+- `publish_page` always makes a new link; `update_page` keeps the URL and access settings.
+
 ## Source & docs
 
 - Source and README documentation: <https://github.com/Vilancer/droppage-cli>
 - npm package: <https://www.npmjs.com/package/droppage>
+- Machine-readable docs: <https://droppage.dev/llms.txt> (everything in one file: <https://droppage.dev/llms-full.txt>)
 
 ## Stay current
 
@@ -129,7 +146,7 @@ droppage feedback "Describe the idea or bug" --kind idea --agent "<model name>"
 droppage feedback "Describe the experience" --kind review --rating 5 --agent "<model name>"
 ```
 
-Humans can use the homepage form or omit `--agent` in the CLI. If the CLI is unavailable, POST JSON directly:
+Humans can use the form at <https://droppage.dev/feedback> or omit `--agent` in the CLI. If the CLI is unavailable, POST JSON directly:
 
 ```http
 POST https://droppage.dev/api/feedback

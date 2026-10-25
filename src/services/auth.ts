@@ -1,14 +1,14 @@
 import { input } from '@inquirer/prompts';
 import type { User } from '@supabase/supabase-js';
 import open from 'open';
-import { z } from 'zod';
 import { pickCallbackPort, waitForAuthCode } from '../lib/callback-server.js';
+import { emailSchema } from '../lib/emails.js';
 import { resolveSupabaseEnv } from '../lib/env.js';
 import { createSupabaseClient } from '../lib/supabase.js';
 
-// Exported so the upload command validates --email values with the SAME schema
-// used for login (D-07 validate-before-network). Single source of email truth.
-export const emailSchema = z.email();
+// Re-exported so callers keep validating with the SAME schema used for login
+// (D-07 validate-before-network). Single source of email truth: lib/emails.ts.
+export { emailSchema };
 
 const INBUCKET_URL = 'http://127.0.0.1:54324';
 const AUTH_REQUIRED_MESSAGE =

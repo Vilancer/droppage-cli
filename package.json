@@ -1,6 +1,6 @@
 {
   "name": "droppage",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Publish HTML files as shareable, access-controlled live pages",
   "type": "module",
   "license": "Apache-2.0",
@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "8.5.2",
+    "@modelcontextprotocol/server": "2.4.0",
     "@supabase/supabase-js": "2.110.8",
     "bcryptjs": "3.0.3",
     "commander": "15.0.0",
@@ -52,9 +53,10 @@
     "dotenv": "17.4.2",
     "nanoid": "5.1.16",
     "open": "11.0.0",
-    "zod": "4.4.3"
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@types/node": "^22.15.0",
     "tsup": "8.5.1",
     "tsx": "4.23.1",

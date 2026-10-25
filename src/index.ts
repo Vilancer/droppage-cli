@@ -11,6 +11,7 @@ import { registerQuota } from './commands/quota.js';
 import { registerFeedback } from './commands/feedback.js';
 import { registerUpgrade } from './commands/upgrade.js';
 import { registerImage } from './commands/image.js';
+import { registerMcp } from './commands/mcp.js';
 import { dashSlugHint } from './lib/slug.js';
 
 export function createProgram(): Command {
@@ -34,6 +35,7 @@ export function createProgram(): Command {
   registerImage(program);
   registerFeedback(program);
   registerUpgrade(program);
+  registerMcp(program);
 
   return program;
 }

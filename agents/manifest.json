@@ -1,7 +1,7 @@
 {
   "name": "droppage-agent-pack",
-  "version": "0.3.0",
-  "updated_at": "2026-10-23",
+  "version": "0.4.0",
+  "updated_at": "2026-10-25",
   "homepage": "https://droppage.dev",
   "repository": "https://github.com/Vilancer/droppage-cli",
   "cli": {

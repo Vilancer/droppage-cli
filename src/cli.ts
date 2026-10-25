@@ -13,5 +13,9 @@ if (nodeMajor < MIN_NODE_MAJOR) {
 const { createProgram } = await import('./index.js');
 const program: Command = createProgram();
 await program.parseAsync(process.argv);
-const { checkForUpdate } = await import('./lib/update-check.js');
-await checkForUpdate();
+// Not for `mcp`: its action returns while the server keeps running, so a notice
+// would land in the middle of the session.
+if (program.args[0] !== 'mcp') {
+  const { checkForUpdate } = await import('./lib/update-check.js');
+  await checkForUpdate();
+}

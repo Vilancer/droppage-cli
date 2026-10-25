@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import { findLocalImages, isVideoFile, rewriteImageRefs } from '../lib/html-images.js';
+import { notify } from '../lib/notify.js';
 import { ImageRequestError, pruneImages, uploadImage, type UploadedImage } from './images.js';
 
 /**
@@ -26,7 +27,7 @@ export async function attachLocalImages(
     urls.set(image.ref, result.url);
     uploaded.push(result);
     const kind = isVideoFile(image.path) ? 'video' : 'image';
-    console.error(`droppage: ${kind} ${basename(image.path)} → ${result.url}`);
+    notify('info', `${kind} ${basename(image.path)} → ${result.url}`);
   }
   return { html: Buffer.from(rewriteImageRefs(text, urls), 'utf8'), uploaded };
 }
@@ -48,7 +49,7 @@ export async function pruneUnusedImages(slug: string, html?: Buffer): Promise<nu
     return await pruneImages(slug, html);
   } catch (err) {
     if (err instanceof ImageRequestError && err.status === 409) {
-      console.error(`droppage: warning: unused images were kept (${err.message}); the next update removes them`);
+      notify('warning', `unused images were kept (${err.message}); the next update removes them`);
       return 0;
     }
     throw err;

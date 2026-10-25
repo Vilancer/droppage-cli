@@ -27,7 +27,11 @@ function rejectSecrets(label: string, value: string): void {
 export function resolveSupabaseEnv(): { url: string; anonKey: string } {
   // `quiet` suppresses dotenv's own stdout banner, which would otherwise
   // corrupt the machine-readable stdout contract (URL / JSON / id only).
+  // DROPPAGE_HOME is taken only from the real environment: a project's .env
+  // must not move the session (it could land inside a repo and get committed).
+  const homeFromRealEnv = process.env.DROPPAGE_HOME !== undefined;
   loadDotenv({ path: join(process.cwd(), '.env'), quiet: true });
+  if (!homeFromRealEnv) delete process.env.DROPPAGE_HOME;
 
   const url =
     process.env.DROPPAGE_SUPABASE_URL ||

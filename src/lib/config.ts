@@ -1,6 +1,6 @@
 import Conf from 'conf';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { SupportedStorage } from '@supabase/supabase-js';
 
 const FORBIDDEN = /service_role|sb_secret/i;
@@ -13,21 +13,32 @@ type UpdateCheckStore = {
 
 type ConfSlot<T extends Record<string, unknown>> = {
   instance?: Conf<T>;
-  home?: string;
+  dir?: string;
 };
 
 const sessionConf: ConfSlot<DroppageConfStore> = {};
 const updateCheckConf: ConfSlot<UpdateCheckStore> = {};
 
+/**
+ * The folder holding the session and the update-check cache: `$DROPPAGE_HOME`
+ * when set (relative paths resolve against the current folder), else
+ * `~/.droppage`. Lets scripts, CI and tests keep their own session without
+ * touching HOME. A `./.env` file cannot set it (see `resolveSupabaseEnv`).
+ */
+export function getDroppageDir(): string {
+  const dir = process.env.DROPPAGE_HOME?.trim();
+  return dir ? resolve(dir) : join(homedir(), '.droppage');
+}
+
 function confAt<T extends Record<string, unknown>>(
   slot: ConfSlot<T>,
   configName: string,
 ): Conf<T> {
-  const home = homedir();
-  if (!slot.instance || slot.home !== home) {
-    slot.home = home;
+  const dir = getDroppageDir();
+  if (!slot.instance || slot.dir !== dir) {
+    slot.dir = dir;
     slot.instance = new Conf<T>({
-      cwd: join(home, '.droppage'),
+      cwd: dir,
       configName,
       configFileMode: 0o600,
     });
@@ -35,9 +46,9 @@ function confAt<T extends Record<string, unknown>>(
   return slot.instance;
 }
 
-/** Path to session-only config: ~/.droppage/config.json (D-08, CLI-02). */
+/** Path to session-only config: <droppage dir>/config.json (D-08, CLI-02). */
 export function getDroppageConfigPath(): string {
-  return join(homedir(), '.droppage', 'config.json');
+  return join(getDroppageDir(), 'config.json');
 }
 
 /**
@@ -58,12 +69,12 @@ export function validateConfig(data: Record<string, unknown>): void {
   }
 }
 
-/** Conf singleton scoped to current homedir (session tokens only — never URL/anon). */
+/** Conf singleton scoped to the droppage folder (session tokens only — never URL/anon). */
 export function getConf(): Conf<DroppageConfStore> {
   return confAt(sessionConf, 'config');
 }
 
-/** Non-identifying npm release cache: ~/.droppage/update-check.json. */
+/** Non-identifying npm release cache: <droppage dir>/update-check.json. */
 export function getUpdateCheckConf(): Conf<UpdateCheckStore> {
   return confAt(updateCheckConf, 'update-check');
 }

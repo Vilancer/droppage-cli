@@ -33,6 +33,12 @@ export type RecipientListResult = {
   recipients: RecipientRow[];
 };
 
+export type InviteResult = {
+  slug: string;
+  queued: number;
+  invited: string[];
+};
+
 export type AddRecipientsResult = {
   slug: string;
   queued: number;
@@ -116,6 +122,18 @@ export async function addRecipients(
     method: 'POST',
     body: JSON.stringify({ emails }),
   })) as AddRecipientsResult;
+}
+
+/**
+ * Email an invitation to everyone on an email page who has not had one yet.
+ * Publishing only lists the addresses; this is the step that mails them. Safe to
+ * repeat: people already invited are skipped (use `resendRecipient` for them).
+ */
+export async function inviteRecipients(slug: string): Promise<InviteResult> {
+  return (await authedFetch(recipientsPath(slug), {
+    method: 'POST',
+    body: JSON.stringify({ action: 'invite' }),
+  })) as InviteResult;
 }
 
 export async function removeRecipient(

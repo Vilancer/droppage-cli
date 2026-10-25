@@ -387,3 +387,48 @@ test('service-tier dispatch functions are not executable by an ordinary user', a
   });
   expect(active.error?.message).toMatch(/permission denied/i);
 });
+
+test('invite_page_recipients queues each never-invited recipient exactly once', async (ctx) => {
+  if (!hasEnv || !reachable) return void (console.warn(skipReason()), ctx.skip());
+  await resetRecipients();
+
+  const first = await owner!.rpc('invite_page_recipients', { p_slug: slug });
+  expect(first.error).toBeNull();
+  expect((first.data as { email: string }[]).map((r) => r.email)).toEqual(['seed@example.com']);
+
+  const again = await owner!.rpc('invite_page_recipients', { p_slug: slug });
+  expect(again.data).toEqual([]);
+
+  const { data: jobs } = await admin!.from('invitation_jobs').select('id').eq('page_id', pageId);
+  expect(jobs).toHaveLength(1);
+  const { data: seed } = await admin!
+    .from('page_recipients')
+    .select('invitation_status')
+    .eq('page_id', pageId)
+    .eq('email', 'seed@example.com')
+    .single();
+  expect(seed!.invitation_status).toBe('queued');
+});
+
+test('overlapping invite calls never invite anyone twice', async (ctx) => {
+  if (!hasEnv || !reachable) return void (console.warn(skipReason()), ctx.skip());
+  await resetRecipients();
+
+  const results = await Promise.all(
+    Array.from({ length: 4 }, () => owner!.rpc('invite_page_recipients', { p_slug: slug })),
+  );
+  expect(results.every((r) => r.error === null)).toBe(true);
+  expect(results.flatMap((r) => r.data as unknown[])).toHaveLength(1);
+  const { data: jobs } = await admin!.from('invitation_jobs').select('id').eq('page_id', pageId);
+  expect(jobs).toHaveLength(1);
+});
+
+test('a stranger cannot invite the recipients of someone else\'s page', async (ctx) => {
+  if (!hasEnv || !reachable) return void (console.warn(skipReason()), ctx.skip());
+  await resetRecipients();
+
+  const res = await stranger!.rpc('invite_page_recipients', { p_slug: slug });
+  expect(res.error?.message).toMatch(/page not found/i);
+  const { data: jobs } = await admin!.from('invitation_jobs').select('id').eq('page_id', pageId);
+  expect(jobs).toHaveLength(0);
+});

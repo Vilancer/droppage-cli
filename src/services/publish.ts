@@ -12,6 +12,7 @@ import { validateHtmlUpload } from '../lib/validate-html.js';
 import type { UploadedImage } from './images.js';
 import { attachLocalImages, hasLocalImages, pruneUnusedImages } from './page-images.js';
 import { assertUpdateAllowed, setPageExpiry, updatePageHtml } from './pages.js';
+import { inviteRecipients } from './recipients.js';
 import { type AccessMode, upload } from './upload.js';
 
 
@@ -53,19 +54,23 @@ export function resolveAccess(
 
 /**
  * Publish an HTML file as a new page. Local images and videos it references are
- * uploaded to the page and their links rewritten once the slug is chosen.
+ * uploaded to the page and their links rewritten once the slug is chosen. An
+ * email page then emails each listed person an invitation, unless `invite` is
+ * false. `invited` lists who was invited (null when nobody was asked to be).
  */
 export async function publishPage({
   file,
   user,
   access,
   expiresAt,
+  invite = true,
 }: {
   file: string;
   user: User;
   access: ResolvedAccess;
   expiresAt?: Date;
-}): Promise<{ url: string; media: UploadedImage[] }> {
+  invite?: boolean;
+}): Promise<{ url: string; slug: string; media: UploadedImage[]; invited: string[] | null }> {
   let media: UploadedImage[] = [];
   const prepare = (await hasLocalImages(file))
     ? async (slug: string) => {
@@ -75,7 +80,29 @@ export async function publishPage({
       }
     : undefined;
   const url = await upload({ file, user, ...access, prepare, expiresAt });
-  return { url, media };
+  const slug = url.slice(url.lastIndexOf('/') + 1);
+  let invited: string[] | null = null;
+  if (access.accessMode === 'email') {
+    if (invite) invited = await sendInvitations(slug);
+    else notify('info', `no invitations sent; send them with \`droppage recipients invite ${slug}\` when ready`);
+  }
+  return { url, slug, media, invited };
+}
+
+/**
+ * Invite the people on a page just published. The page is live either way, so
+ * a failure here is a warning with the way to retry, not a failed publish.
+ */
+async function sendInvitations(slug: string): Promise<string[] | null> {
+  try {
+    const { invited } = await inviteRecipients(slug);
+    notify('info', `${invited.length} invitation(s) queued: ${invited.join(', ')}`);
+    return invited;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    notify('warning', `the page is published, but the invitations were not sent (${message}); send them with \`droppage recipients invite ${slug}\``);
+    return null;
+  }
 }
 
 /**

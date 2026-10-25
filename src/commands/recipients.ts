@@ -8,6 +8,7 @@ import {
   listRecipients,
   removeRecipient,
   RecipientRequestError,
+  inviteRecipients,
   resendRecipient,
   type RecipientRow,
 } from '../services/recipients.js';
@@ -98,6 +99,21 @@ export function registerRecipients(program: Command): void {
         // request returns (RECIP-02). Check `recipients list` for the outcome.
         console.error(
           `droppage: ${result.queued} invitation(s) queued, ${result.unchanged} already had access.`,
+        );
+      });
+    });
+
+  recipients
+    .command('invite')
+    .description('Email an invitation to everyone on the page who has not had one yet')
+    .argument('<slug>', 'slug of the page')
+    .action(async (slug: string) => {
+      await run(async () => {
+        const result = await inviteRecipients(slug);
+        console.error(
+          result.queued
+            ? `droppage: ${result.queued} invitation(s) queued: ${result.invited.join(', ')}`
+            : 'droppage: everyone on this page has already been invited; use `recipients resend` to send one again.',
         );
       });
     });

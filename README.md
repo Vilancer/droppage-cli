@@ -36,9 +36,9 @@ Open the printed link in any browser. That's it.
 
 | Command | What it does |
 |---|---|
-| `droppage login` | Authenticate with a magic link (session stored in `~/.droppage/config.json`). |
+| `droppage login` | Authenticate with a magic link (session stored in `~/.droppage/config.json`, or under `DROPPAGE_HOME`). |
 | `droppage logout` | Sign out and clear local credentials. |
-| `droppage upload <file>` | Publish an `.html`/`.htm` file (and the local images and videos it references) and print its URL. Options: `--password`, `--email <addr>`, `--private`, `--expires <when>`. |
+| `droppage upload <file>` | Publish an `.html`/`.htm` file (and the local images and videos it references) and print its URL. Options: `--password`, `--email <addr>` (with `--no-invite`), `--private`, `--expires <when>`. |
 | `droppage update <slug> <file>` | Replace the HTML (and images and videos) behind an existing URL. Keeps the URL, access mode, and stats. `--expires <when\|never>` changes the expiry. |
 | `droppage expire <slug> <when\|never>` | Set or clear when a page expires without re-uploading. |
 | `droppage list` | List your pages, including an EXPIRES column. `--json` for machines (rows have `expires_at`), `--preview` for no-count preview URLs. |
@@ -46,6 +46,7 @@ Open the printed link in any browser. That's it.
 | `droppage recipients list <slug>` | List recipients of an email-gated page (`--json`, `--page <n>`). |
 | `droppage recipients add <slug> <emails...>` | Add recipients and queue their invitation emails. |
 | `droppage recipients remove <slug> <email>` | Revoke a recipient; their invitation link stops working (`--yes`). |
+| `droppage recipients invite <slug>` | Email an invitation to everyone on the page who hasn't had one yet (after `upload --no-invite`, or to retry). |
 | `droppage recipients resend <slug> <email>` | Queue a fresh invitation for an existing recipient. |
 | `droppage image upload <files...> --page <slug>` | Advanced: add images (PNG, JPEG, GIF, WebP, AVIF, SVG; up to 4 MB each) or videos (MP4, WebM; up to 20 MB each) to an existing page and print their URLs. Alias: `droppage media upload`. `--json` prints `[{file,id,url,bytes,content_type,existing}]`. |
 | `droppage image list [--page <slug>]` | List your pages' images and videos; with `--page`, one page and its image budget. `--json` for machines. |
@@ -67,7 +68,7 @@ it, with any options before the `--`: `droppage expire -- -AbC12xYz9 never` or
 |---|---|---|
 | *(none)* | public | Anyone with the link. |
 | `--password` | password | Visitors who enter the password (prompted securely at upload time). |
-| `--email a@x.com,b@y.com` | email | Allowlisted addresses, verified by a magic link. Publishing emails nobody: each person enters their email at the link. `recipients add` emails an invitation. |
+| `--email a@x.com,b@y.com` | email | Allowlisted addresses, verified by a magic link. Each person is emailed an invitation when the page is published (0.5.0+); add `--no-invite` to send them later with `recipients invite`. |
 | `--private` | private | Only you (your account email). Useful for drafts. |
 
 `--password`, `--email`, and `--private` are mutually exclusive. `update` never changes the access
@@ -233,7 +234,7 @@ command = "npx"
 args = ["-y", "droppage", "mcp"]
 ```
 
-Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list.
+Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `invite`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `invite_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list.
 
 - Signed out, every tool answers "Not signed in. Ask the user to run `droppage login` in a terminal, then retry."
   There is no login tool: login needs the terminal, and stdin belongs to the protocol.
@@ -283,6 +284,7 @@ setups, these environment variables are honoured (in order of precedence):
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | Fallback names for the same. |
 | `DROPPAGE_SHARE_BASE_URL` | Origin used when printing share URLs (default `https://droppage.dev`). |
 | `DROPPAGE_NO_UPDATE_CHECK` | Set to `1` to disable the optional 24-hour npm release check. |
+| `DROPPAGE_HOME` | Folder for the login session and the release-check cache (default `~/.droppage`; 0.5.0+). Use it to keep a separate session for CI, scripts or a test backend: `DROPPAGE_HOME=/tmp/droppage-ci droppage login`. Read only from the environment, never from `./.env`. |
 
 ## Security
 
@@ -291,7 +293,8 @@ setups, these environment variables are honoured (in order of precedence):
 - The CLI refuses to start if a privileged `service_role`/`sb_secret` key is found in its
   environment or config file — those keys must never be used with droppage.
 - Passwords are hashed with bcrypt before they leave your machine.
-- Your session is stored in `~/.droppage/config.json` with `0600` permissions.
+- Your session is stored in `~/.droppage/config.json` (or `$DROPPAGE_HOME/config.json`) with `0600`
+  permissions. A project's `./.env` cannot move it.
 
 ## License
 

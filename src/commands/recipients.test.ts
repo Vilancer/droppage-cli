@@ -5,6 +5,7 @@ const listRecipientsMock = vi.fn();
 const addRecipientsMock = vi.fn();
 const removeRecipientMock = vi.fn();
 const resendRecipientMock = vi.fn();
+const inviteRecipientsMock = vi.fn();
 const requireAuthMock = vi.fn();
 const confirmMock = vi.fn();
 
@@ -30,6 +31,7 @@ vi.mock('../services/recipients.js', () => ({
   addRecipients: (...a: unknown[]) => addRecipientsMock(...a),
   removeRecipient: (...a: unknown[]) => removeRecipientMock(...a),
   resendRecipient: (...a: unknown[]) => resendRecipientMock(...a),
+  inviteRecipients: (...a: unknown[]) => inviteRecipientsMock(...a),
   RecipientRequestError,
 }));
 
@@ -247,4 +249,28 @@ test('an unauthenticated caller exits quietly without touching the service', asy
   await run('list', 'abc');
   expect(listRecipientsMock).not.toHaveBeenCalled();
   expect(process.exitCode).toBeUndefined();
+});
+
+// --- invite ----------------------------------------------------------------
+
+test('invite queues the never-invited and names them on stderr, stdout empty', async () => {
+  inviteRecipientsMock.mockResolvedValue({ slug: 'abc', queued: 2, invited: ['a@x.com', 'b@x.com'] });
+  await run('invite', 'abc');
+  expect(inviteRecipientsMock).toHaveBeenCalledWith('abc');
+  expect(stderr).toContain('2 invitation(s) queued: a@x.com, b@x.com');
+  expect(stdout).toBe('');
+});
+
+test('invite with everyone already invited points to resend', async () => {
+  inviteRecipientsMock.mockResolvedValue({ slug: 'abc', queued: 0, invited: [] });
+  await run('invite', 'abc');
+  expect(stderr).toContain('already been invited');
+  expect(stderr).toContain('recipients resend');
+});
+
+test('invite on a non-email page fails with the server message and exit 1', async () => {
+  inviteRecipientsMock.mockRejectedValue(new RecipientRequestError('invitations go only to email pages (this page is public)', 400));
+  await run('invite', 'abc');
+  expect(stderr).toContain('droppage: invitations go only to email pages (this page is public)');
+  expect(process.exitCode).toBe(1);
 });

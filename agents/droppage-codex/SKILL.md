@@ -93,7 +93,7 @@ Build the report as one self-contained `.html` file (5 MB max):
 
 Choose access deliberately; business data is rarely meant to be public:
 
-- Named stakeholders: `--email cfo@example.com,ops@example.com` (Builder plan). Publishing emails nobody: each person opens the link and enters their email to get an access link. Add people later with `droppage recipients add <slug> <emails...>`, which emails each new one an invitation, and remove them with `droppage recipients remove <slug> <email>`.
+- Named stakeholders: `--email cfo@example.com,ops@example.com` (Builder plan). Publishing emails each person an invitation with an access link (CLI 0.5.0+; before that it emailed nobody and each person had to ask at the link). To publish now and send the invitations later, add `--no-invite`, then run `droppage recipients invite <slug>`. Add people later with `droppage recipients add <slug> <emails...>`, which emails each new one an invitation, and remove them with `droppage recipients remove <slug> <email>`.
 - A group link: `--password` (Starter and Builder; interactive prompt).
 - A draft for the user to check first: `--private`.
 - Public only when the user says the content can be public. On the Free plan, pages can be public or private, without a password or email list. `droppage quota --json` shows the plan.
@@ -173,7 +173,7 @@ If the client supports MCP (Claude Code, Cursor, Codex, Windsurf, Claude Desktop
 - Cursor (`.cursor/mcp.json`), Windsurf (`~/.codeium/windsurf/mcp_config.json`), Claude Desktop (`claude_desktop_config.json`): `{"mcpServers": {"droppage": {"command": "npx", "args": ["-y", "droppage", "mcp"]}}}`
 - Codex (`~/.codex/config.toml`): a `[mcp_servers.droppage]` table with `command = "npx"` and `args = ["-y", "droppage", "mcp"]`
 
-Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list; the page URL is in `url`.
+Tools: `publish_page` (a file `path` or inline `html`; `access` public, email or private; `emails`; `invite`; `expires`), `update_page`, `list_pages`, `delete_page`, `set_page_expiry`, `get_quota`, `list_recipients`, `add_recipients`, `invite_recipients`, `remove_recipient`, `upload_media`, `list_media`, `delete_media`, `send_feedback`. Results are JSON with a `warnings` list; the page URL is in `url`.
 
 - Sign-in stays in a terminal. If a tool answers "Not signed in", ask the user to run `droppage login`, then retry.
 - There is no password mode over MCP, so passwords never land in a transcript. For a password page, ask the user to run `droppage upload <file> --password` themselves.

@@ -20,6 +20,11 @@ vi.mock('../services/page-images.js', () => ({
   attachLocalImages: async () => ({ html: Buffer.from(''), uploaded: [] }),
 }));
 
+const inviteMock = vi.fn();
+vi.mock('../services/recipients.js', () => ({
+  inviteRecipients: (...args: unknown[]) => inviteMock(...args),
+}));
+
 vi.mock('../services/upload.js', () => ({
   upload: (...args: unknown[]) => uploadMock(...args),
 }));
@@ -51,6 +56,8 @@ beforeEach(() => {
   uploadMock.mockReset();
   requireAuthMock.mockReset();
   passwordPromptMock.mockReset();
+  inviteMock.mockReset();
+  inviteMock.mockResolvedValue({ slug: 'abcdefghij', queued: 0, invited: [] });
   process.exitCode = undefined;
 });
 
@@ -405,4 +412,43 @@ test('no mode flag → upload() gets public accessMode and no allowlist (unchang
   };
   expect(arg.allowedEmails).toBeUndefined();
   expect(arg.accessMode).toBe('public');
+});
+
+test('--email invites the listed people after publishing; stdout stays the URL', async () => {
+  requireAuthMock.mockResolvedValue({ id: 'u1', email: 'owner@x.com' });
+  uploadMock.mockResolvedValue('https://droppage.dev/p/abcdefghij');
+  inviteMock.mockResolvedValue({ slug: 'abcdefghij', queued: 2, invited: ['a@x.com', 'b@x.com'] });
+  const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  await run('report.html', '--email', 'a@x.com,b@x.com');
+
+  expect(inviteMock).toHaveBeenCalledWith('abcdefghij');
+  expect(outSpy.mock.calls).toEqual([['https://droppage.dev/p/abcdefghij\n']]);
+  expect(errSpy.mock.calls.flat().join('\n')).toContain('2 invitation(s) queued: a@x.com, b@x.com');
+  expect(process.exitCode).toBeUndefined();
+});
+
+test('--email --no-invite publishes without emailing and says how to send later', async () => {
+  requireAuthMock.mockResolvedValue({ id: 'u1', email: 'owner@x.com' });
+  uploadMock.mockResolvedValue('https://droppage.dev/p/abcdefghij');
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  await run('report.html', '--email', 'a@x.com', '--no-invite');
+
+  expect(inviteMock).not.toHaveBeenCalled();
+  expect(errSpy.mock.calls.flat().join('\n')).toContain('no invitations sent; send them with `droppage recipients invite abcdefghij` when ready');
+});
+
+test('public and private uploads never call the invite endpoint', async () => {
+  requireAuthMock.mockResolvedValue({ id: 'u1', email: 'owner@x.com' });
+  uploadMock.mockResolvedValue('https://droppage.dev/p/abcdefghij');
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+
+  await run('report.html');
+  await run('report.html', '--private');
+
+  expect(inviteMock).not.toHaveBeenCalled();
 });

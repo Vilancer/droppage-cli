@@ -33,11 +33,12 @@ export function registerUpload(program: Command): void {
     // ACC-03 / D-04/D-06: boolean flag — owner-only draft. Self-allowlists the
     // authenticated user's own email; anonymous visitors are blocked.
     .option('--private', 'restrict access to only you (owner-only draft)')
+    .option('--no-invite', 'with --email: do not email the invitations now (send them later with `recipients invite`)')
     .option('--expires <when>', 'delete the page (and its images and videos) after 30m, 12h, 7d, 2w or on a date')
     .action(
       async (
         file: string,
-        options: { password?: boolean; email?: string[]; private?: boolean; expires?: string },
+        options: { password?: boolean; email?: string[]; private?: boolean; expires?: string; invite: boolean },
       ) => {
         // Single auth gate (WR-04): resolve the publisher once here and thread the
         // user into upload(), rather than calling getUser() again in the service.
@@ -93,7 +94,7 @@ export function registerUpload(program: Command): void {
           console.error(`droppage: uploading ${file}...`);
           // Local <img src="chart.png"> files are uploaded to the page and the
           // links rewritten, once the page's slug is chosen.
-          const { url } = await publishPage({ file, user, access, expiresAt });
+          const { url } = await publishPage({ file, user, access, expiresAt, invite: options.invite });
           if (expiresAt) console.error(`droppage: expires ${expiresAt.toISOString()}`);
           console.error('droppage: done');
           // stdout carries ONLY the bare URL — pipe-friendly for agents/CI.

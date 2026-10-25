@@ -92,3 +92,17 @@ test.for([
   expect(logSpy).not.toHaveBeenCalled();
   expect(outSpy).not.toHaveBeenCalled();
 });
+
+test('DROPPAGE_HOME is ignored in ./.env and kept from the real environment', () => {
+  tempDir = mkdtempSync(join(tmpdir(), 'droppage-env-'));
+  writeFileSync(join(tempDir, '.env'), 'DROPPAGE_HOME=./session\n');
+  process.chdir(tempDir);
+
+  delete process.env.DROPPAGE_HOME;
+  resolveSupabaseEnv();
+  expect(process.env.DROPPAGE_HOME).toBeUndefined();
+
+  process.env.DROPPAGE_HOME = '/tmp/my-droppage';
+  resolveSupabaseEnv();
+  expect(process.env.DROPPAGE_HOME).toBe('/tmp/my-droppage');
+});

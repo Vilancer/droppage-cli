@@ -72,6 +72,18 @@ test('resend POSTs the resend action', async () => {
   expect(JSON.parse(init.body)).toEqual({ action: 'resend', email: 'a@x.com' });
 });
 
+test('invite POSTs the invite action', async () => {
+  fetchMock.mockResolvedValue(jsonResponse({ slug: 'abc', queued: 1, invited: ['a@x.com'] }));
+  const { inviteRecipients } = await import('./recipients.js');
+  const result = await inviteRecipients('abc');
+
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toMatch(/\/api\/pages\/abc\/recipients$/);
+  expect(init.method).toBe('POST');
+  expect(JSON.parse(init.body)).toEqual({ action: 'invite' });
+  expect(result.invited).toEqual(['a@x.com']);
+});
+
 test('a signed-out caller fails before any network call', async () => {
   getSessionMock.mockResolvedValue({ data: { session: null } });
   const { listRecipients, RecipientRequestError } = await import('./recipients.js');

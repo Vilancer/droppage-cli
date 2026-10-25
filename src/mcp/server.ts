@@ -18,7 +18,7 @@ import { fetchPreviewUrls, pageJson } from '../services/page-list.js';
 import { deletePage, listPages, setPageExpiry } from '../services/pages.js';
 import { publishPage, resolveAccess, updatePage } from '../services/publish.js';
 import { fetchQuota } from '../services/quota.js';
-import { addRecipients, listRecipients, removeRecipient } from '../services/recipients.js';
+import { addRecipients, inviteRecipients, listRecipients, removeRecipient } from '../services/recipients.js';
 
 export const NOT_SIGNED_IN =
   'Not signed in. Ask the user to run `droppage login` in a terminal, then retry.';
@@ -28,7 +28,7 @@ export const SERVER_INSTRUCTIONS = `droppage publishes a single HTML file (a rep
 - Sign-in happens outside MCP: if a tool answers "Not signed in", ask the user to run \`droppage login\` in a terminal, then retry. Never ask for keys or tokens.
 - Every publish_page call creates a NEW link. To change a page someone already has, use update_page with its slug: same URL, same access settings.
 - A page's access mode is set when it is published and no tool changes it. To share it differently, publish a new link with the new access (and delete the old one if the user wants); never promise to change access later.
-- Choose access deliberately. email: only the listed people, who enter their email at the link to get an access link (Builder plan); add_recipients also emails new people an invitation. private: only the owner, for a draft. public: anyone with the link, only when the user says the content can be public. For a password page, ask the user to run \`droppage upload <file> --password\` in a terminal: passwords never go through MCP.
+- Choose access deliberately. email: only the listed people (Builder plan); publish_page emails each of them an invitation with an access link, unless you pass invite: false (then send them later with invite_recipients), and add_recipients invites people added later. private: only the owner, for a draft. public: anyone with the link, only when the user says the content can be public. For a password page, ask the user to run \`droppage upload <file> --password\` in a terminal: passwords never go through MCP.
 - Pages are one self-contained HTML file up to 5 MB. Local images and videos the HTML references (paths relative to the file, inside its folder) are uploaded with it when you pass \`path\`; inline \`html\` cannot carry them.
 - Before building a page, load Anthropic's frontend-design skill so the report doesn't look templated.
 - Before bulk publishing, call get_quota. Results are JSON; \`warnings\` lists anything the user should know.`;
@@ -98,7 +98,6 @@ async function withHtmlFile<T>(input: { path?: string; html?: string }, run: (fi
   }
 }
 
-const slugFrom = (url: string) => url.slice(url.lastIndexOf('/') + 1);
 const iso = (date: Date | null | undefined) => date?.toISOString() ?? null;
 const slug = z.string().min(1).describe('The page slug (the last part of its URL).');
 
@@ -117,7 +116,8 @@ export function createDroppageServer(): McpServer {
       inputSchema: z.object({
         ...source,
         access: z.enum(['public', 'email', 'private']).describe('public: anyone with the link (only when the user says so). email: only `emails` (Builder plan). private: only the owner.'),
-        emails: z.array(z.string()).min(1).optional().describe('Who can open an email page; they enter their email at the link to get an access link. Only with access "email".'),
+        emails: z.array(z.string()).min(1).optional().describe('Who can open an email page; each is emailed an invitation with an access link. Only with access "email".'),
+        invite: z.boolean().optional().describe('Email page only: false publishes without emailing the invitations (send them later with invite_recipients). Default true.'),
         expires: z.string().optional().describe('Delete the page after 30m, 12h, 7d, 2w, or on a date like 2026-12-31.'),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -127,14 +127,14 @@ export function createDroppageServer(): McpServer {
         if (input.access !== 'email' && input.emails) throw new ToolError('`emails` only goes with access "email"');
         const access = resolveAccess(user, input.access, { emails: input.emails });
         const expiresAt = input.expires ? parseExpiry(input.expires) ?? undefined : undefined;
-        const { url, media } = await withHtmlFile(input, (file) =>
-          publishPage({ file, user: user, access, expiresAt }),
+        const { url, slug: pageSlug, media, invited } = await withHtmlFile(input, (file) =>
+          publishPage({ file, user: user, access, expiresAt, invite: input.invite }),
         );
         return {
           url,
-          slug: slugFrom(url),
+          slug: pageSlug,
           access_mode: access.accessMode,
-          ...(access.allowedEmails && access.accessMode === 'email' ? { allowed_emails: access.allowedEmails } : {}),
+          ...(access.allowedEmails && access.accessMode === 'email' ? { allowed_emails: access.allowedEmails, invited: invited ?? [] } : {}),
           expires_at: iso(expiresAt),
           media,
         };
@@ -258,6 +258,17 @@ export function createDroppageServer(): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     (input) => call(async (user) => addRecipients(input.slug, cleanEmails(input.emails), user)),
+  );
+
+  server.registerTool(
+    'invite_recipients',
+    {
+      title: 'Invite recipients',
+      description: 'Email an invitation to everyone on an email page who has not had one yet, e.g. after publish_page with invite: false. People already invited are skipped.',
+      inputSchema: z.object({ slug }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    (input) => call(async () => inviteRecipients(input.slug)),
   );
 
   server.registerTool(

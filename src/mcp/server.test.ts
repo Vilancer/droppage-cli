@@ -7,6 +7,7 @@ const uploadMock = vi.fn();
 const deletePageMock = vi.fn();
 const submitFeedbackMock = vi.fn();
 const uploadImageMock = vi.fn();
+const inviteRecipientsMock = vi.fn();
 
 vi.mock('../services/auth.js', () => ({
   getCurrentUser: (...a: unknown[]) => getCurrentUserMock(...a),
@@ -30,6 +31,12 @@ vi.mock('../services/images.js', () => ({
   uploadImage: (...a: unknown[]) => uploadImageMock(...a),
   listImages: async () => ({ images: [] }),
   deleteImage: async (id: string) => id,
+}));
+vi.mock('../services/recipients.js', () => ({
+  inviteRecipients: (...a: unknown[]) => inviteRecipientsMock(...a),
+  addRecipients: async () => ({}),
+  listRecipients: async () => ({}),
+  removeRecipient: async () => {},
 }));
 vi.mock('../services/feedback.js', () => ({
   submitFeedback: (...a: unknown[]) => submitFeedbackMock(...a),
@@ -71,7 +78,7 @@ test('lists the droppage tools and never offers a password mode', async () => {
   const client = await connect();
   const { tools } = await client.listTools();
   expect(tools.map((tool) => tool.name).sort()).toEqual([
-    'add_recipients', 'delete_media', 'delete_page', 'get_quota', 'list_media', 'list_pages',
+    'add_recipients', 'delete_media', 'delete_page', 'get_quota', 'invite_recipients', 'list_media', 'list_pages',
     'list_recipients', 'publish_page', 'remove_recipient', 'send_feedback', 'set_page_expiry',
     'update_page', 'upload_media',
   ]);
@@ -129,8 +136,15 @@ test('publish_page email validates every address before any upload', async () =>
   expect(missing.isError).toBe(true);
   expect(uploadMock).not.toHaveBeenCalled();
 
+  inviteRecipientsMock.mockResolvedValue({ slug: 'NewSlug123', queued: 1, invited: ['b@y.com'] });
   const ok = await callTool(client, 'publish_page', { path: 'r.html', access: 'email', emails: [' B@y.com', 'b@y.com'] });
-  expect(ok.json()).toMatchObject({ access_mode: 'email', allowed_emails: ['b@y.com'] });
+  expect(ok.json()).toMatchObject({ access_mode: 'email', allowed_emails: ['b@y.com'], invited: ['b@y.com'], warnings: [] });
+  expect(inviteRecipientsMock).toHaveBeenCalledWith('NewSlug123');
+
+  inviteRecipientsMock.mockClear();
+  const quiet = await callTool(client, 'publish_page', { path: 'r.html', access: 'email', emails: ['b@y.com'], invite: false });
+  expect(quiet.json()).toMatchObject({ allowed_emails: ['b@y.com'], invited: [] });
+  expect(inviteRecipientsMock).not.toHaveBeenCalled();
 });
 
 test('publish_page needs exactly one of path or html', async () => {

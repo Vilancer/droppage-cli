@@ -1,7 +1,8 @@
 {
   "name": "droppage",
-  "version": "0.5.0",
-  "description": "Publish HTML files as shareable, access-controlled live pages",
+  "version": "0.5.1",
+  "mcpName": "io.github.Vilancer/droppage",
+  "description": "Share analyst reports and dashboards as a live link",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Vilancer",
@@ -17,11 +18,21 @@
     "html",
     "publish",
     "share",
+    "share-html",
+    "html-to-link",
     "report",
+    "analyst",
+    "dashboard",
+    "analytics",
+    "jupyter",
+    "plotly",
     "cli",
     "link",
     "access-control",
-    "agents"
+    "agents",
+    "mcp",
+    "mcp-server",
+    "claude-code"
   ],
   "engines": {
     "node": ">=22"

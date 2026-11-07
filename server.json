@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Vilancer/droppage",
+  "title": "droppage",
+  "description": "Share analyst reports and dashboards as a live link.",
+  "websiteUrl": "https://droppage.dev",
+  "repository": {
+    "url": "https://github.com/Vilancer/droppage-cli",
+    "source": "github",
+    "id": "1351353071"
+  },
+  "version": "0.5.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "droppage",
+      "version": "0.5.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

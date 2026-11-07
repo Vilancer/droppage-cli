@@ -17,9 +17,7 @@ import { dashSlugHint } from './lib/slug.js';
 export function createProgram(): Command {
   const program = new Command()
     .name('droppage')
-    .description(
-      'Publish HTML files as shareable, access-controlled live pages',
-    )
+    .description(pkg.description)
     .version(pkg.version)
     // Set before the subcommands are registered: they copy these settings.
     .configureOutput({ outputError: (str, write) => write(str + dashSlugHint(str)) });

@@ -211,6 +211,8 @@ Machine-readable docs for agents and doc tools such as mcpdoc:
 
 ## Use droppage over MCP
 
+[![droppage MCP on mcprush](https://mcprush.com/badge/droppage-mcp/compact.svg)](https://mcprush.com/to/droppage-mcp?ref=badge)
+
 From 0.4.0, `droppage mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio, so
 agents in Claude Code, Cursor, Codex, Windsurf, or Claude Desktop publish through typed tools instead of shell
 commands. It runs on your machine and uses the session from `droppage login`; sign in once in a terminal first.
